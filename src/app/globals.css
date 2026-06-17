@@ -2157,4 +2157,18 @@ footer::before {
   visibility: visible;
 }
 
+/* Responsive Desktop / Mobile Nav Helper Classes */
+.nav-mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .nav-desktop-only {
+    display: none !important;
+  }
+  .nav-mobile-only {
+    display: flex !important;
+  }
+}
+
 

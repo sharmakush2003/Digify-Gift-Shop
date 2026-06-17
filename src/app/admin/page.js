@@ -948,6 +948,24 @@ const renderEditingReviews = () => {
   });
 };
 
+// Mobile Hamburger Toggle logic for ERP nav
+const erpMenuToggle = document.getElementById('erp-menu-toggle');
+const erpNavMenu = document.getElementById('erp-nav-links');
+if (erpMenuToggle && erpNavMenu) {
+  erpMenuToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    erpNavMenu.classList.toggle('active');
+    erpMenuToggle.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    if (erpNavMenu.classList.contains('active')) {
+      erpNavMenu.classList.remove('active');
+      erpMenuToggle.classList.remove('open');
+    }
+  });
+}
+
 window.addEventListener('load', () => {
   document.body.classList.remove('preload');
 });
@@ -992,8 +1010,8 @@ window.addEventListener('load', () => {
   {/* Nav Bar */}
   <nav className="erp-nav">
     <div className="logo">DIGISOFT <span className="badge">ERP SYSTEM</span></div>
-    <ul className="nav-links">
-      <li><a href="/index.html" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+    <ul className="nav-links" id="erp-nav-links">
+      <li><a href="/" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
           <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -1007,6 +1025,18 @@ window.addEventListener('load', () => {
     </ul>
     <div className="nav-icons">
       <div className="db-status"><span className="status-indicator online"></span> ERP Pipeline Active</div>
+      {/* Hamburger Menu for Mobile */}
+      <div id="erp-menu-toggle" className="erp-menu-toggle" style={{"cursor":"pointer","display":"none","marginLeft":"15px"}}>
+        <svg className="icon-bars" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+        <svg className="icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{"display":"none"}}>
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </div>
     </div>
   </nav>
 

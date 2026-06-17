@@ -2267,6 +2267,8 @@ window.addEventListener('load', () => {
       <li><a href="#featured">Featured</a></li>
       <li><a href="#about">About</a></li>
       <li><a href="#contact">Contact</a></li>
+      <li className="nav-mobile-only"><a href="tel:+15551234567" style={{"display":"flex","alignItems":"center","gap":"8px"}}><i className="fa-solid fa-phone"></i> Call Helpline</a></li>
+      <li className="nav-mobile-only"><a href="/admin" style={{"display":"flex","alignItems":"center","gap":"8px"}}><i className="fa-solid fa-user-gear"></i> Admin Portal</a></li>
     </ul>
     <div className="nav-icons">
       <div className="nav-icon-btn search-trigger" id="search-btn" title="Search">
@@ -2289,12 +2291,12 @@ window.addEventListener('load', () => {
         </svg>
         <span className="cart-badge-count" id="cart-count">0</span>
       </div>
-      <a href="tel:+15551234567" className="nav-icon-btn" title="Call Helpline">
+      <a href="tel:+15551234567" className="nav-icon-btn nav-desktop-only" title="Call Helpline">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
         </svg>
       </a>
-      <a href="/admin.html" className="nav-icon-btn" title="Admin Portal">
+      <a href="/admin" className="nav-icon-btn nav-desktop-only" title="Admin Portal">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
           <circle cx="12" cy="7" r="4"></circle>
@@ -2692,13 +2694,7 @@ window.addEventListener('load', () => {
     </div>
   </footer>
 
-  {/* Floating Classic WhatsApp Button */}
-  <a href="https://wa.me/15551234567" target="_blank" className="classic-whatsapp-btn" id="classic-whatsapp-btn" title="Chat on WhatsApp">
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-    </svg>
-    <span className="classic-whatsapp-tooltip">Chat with us</span>
-  </a>
+
 
   {/* Cart Drawer */}
   <div className="cart-drawer" id="cart-drawer">

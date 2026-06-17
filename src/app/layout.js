@@ -1,5 +1,6 @@
 import "./globals.css";
 import Script from "next/script";
+import WhatsAppFloating from "./components/WhatsAppFloating";
 
 export const metadata = {
   title: "Digisoft Gift Shop | Premium Gifts for Every Occasion",
@@ -19,6 +20,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="preload">
         {children}
+        <WhatsAppFloating />
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"
           strategy="beforeInteractive"

@@ -842,3 +842,62 @@ body.erp-page {
   border-color: var(--primary) !important;
   color: var(--text-main) !important;
 }
+
+/* =============================================
+   ADMIN ERP - MOBILE HAMBURGER MENU STYLES
+   ============================================= */
+@media (max-width: 768px) {
+  .erp-nav {
+    padding: 1rem 5%;
+    position: relative;
+  }
+
+  #erp-menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-main);
+  }
+
+  #erp-menu-toggle.open .icon-bars {
+    display: none !important;
+  }
+
+  #erp-menu-toggle.open .icon-close {
+    display: block !important;
+  }
+
+  .erp-nav .nav-links {
+    display: none !important;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: rgba(11, 12, 16, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 20px;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+
+  .erp-nav .nav-links.active {
+    display: flex !important;
+    animation: slideDownMenuErp 0.3s ease forwards;
+  }
+
+  @keyframes slideDownMenuErp {
+    from { transform: translateY(-8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .db-status {
+    font-size: 0.7rem;
+    padding: 6px 10px;
+  }
+}
+

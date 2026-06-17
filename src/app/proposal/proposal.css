@@ -1038,7 +1038,42 @@ body.proposal-page {
 
 @media (max-width: 768px) {
   .proposal-hero h1 { font-size: 2.6rem; }
-  .proposal-nav .nav-links { display: none; }
+  .proposal-menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-main);
+  }
+  .proposal-menu-toggle.open .icon-bars {
+    display: none !important;
+  }
+  .proposal-menu-toggle.open .icon-close {
+    display: block !important;
+  }
+  .proposal-nav .nav-links {
+    display: none !important;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: rgba(11, 12, 16, 0.98);
+    backdrop-filter: blur(15px);
+    padding: 20px;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+    margin: 0;
+  }
+  .proposal-nav .nav-links.active {
+    display: flex !important;
+    animation: slideDownMenu 0.35s ease forwards;
+  }
+  @keyframes slideDownMenu {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
   .channel-card-grid { grid-template-columns: 1fr; }
   .cta-actions {
     flex-direction: column;

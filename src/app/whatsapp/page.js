@@ -94,7 +94,7 @@ const initWhatsAppSim = () => {
       document.getElementById(`pdf-doc-${orderId}`)?.addEventListener('click', () => {
         alert(`Simulating Invoice download for ${pdfName}.\nOpening print format...`);
         // Force-trigger invoice printer if ERP window exists locally
-        let erpWin = window.open(`/admin.html`, '_blank');
+        let erpWin = window.open(`/admin`, '_blank');
         setTimeout(() => {
           if (erpWin && !erpWin.closed) {
             alert("Admin Dashboard opened. Go to 'Orders Queue' and click 'Invoice' to view and print the TAX receipt.");
@@ -157,7 +157,7 @@ Our logistics checklist verified all items, attached fragile protection labels, 
             
 *Courier Partner:* BlueDart Express
 *Tracking Airway Bill:* AWB-BD-${o.id.substring(3)}
-*Tracking URL:* [track.bluedart.com/query?id=${o.id}](http://localhost:5173/proposal.html)
+*Tracking URL:* [track.bluedart.com/query?id=${o.id}](http://localhost:3000/proposal)
 
 Download your official TAX invoice PDF details attached below. 🧾`;
             hasPdf = true;
@@ -207,7 +207,7 @@ Thank you for shopping with *Digisoft Gift Shop*. Please let us know if you woul
 Don't miss out! Use exclusive code *DIGI10* at checkout to get an extra *10% OFF* your entire order.
 
 Click here to resume your checkout instantly:
-👉 [Resume Checkout - Digisoft Gift Shop](http://localhost:5173/)`;
+👉 [Resume Checkout - Digisoft Gift Shop](http://localhost:3000/)`;
           
           appendMsg('received', text);
           highlightGuide('guide-abandoned');
@@ -274,7 +274,7 @@ Our central database shows your shipment is *${o.courierStatus}*. 🚚`;
     }
     else if (normText.includes("pricing") || normText.includes("price") || normText.includes("rose") || normText.includes("watch")) {
       reply = `You can browse pricing and stock levels directly on our storefront:
-      👉 [Browse Crockery & Gifts - Store](http://localhost:5173/)
+      👉 [Browse Crockery & Gifts - Store](http://localhost:3000/)
       
       We currently have Golden Eternal Rose (₹129.00) and Luxury Watch Box Sets (₹450.00) in stock.`;
     }
@@ -305,6 +305,24 @@ Our central database shows your shipment is *${o.courierStatus}*. 🚚`;
   });
 };
 
+// Mobile Hamburger Toggle logic
+const menuToggle = document.getElementById('whatsapp-menu-toggle');
+const navMenu = document.getElementById('whatsapp-nav-links');
+if (menuToggle && navMenu) {
+  menuToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navMenu.classList.toggle('active');
+    menuToggle.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    if (navMenu.classList.contains('active')) {
+      navMenu.classList.remove('active');
+      menuToggle.classList.remove('open');
+    }
+  });
+}
+
 window.addEventListener('load', () => {
   document.body.classList.remove('preload');
 });
@@ -317,13 +335,13 @@ window.addEventListener('load', () => {
   {/* Nav Bar */}
   <nav className="whatsapp-nav">
     <div className="logo">DIGISOFT <span className="badge">WHATSAPP SIM</span></div>
-    <ul className="nav-links">
-      <li><a href="/index.html" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+    <ul className="nav-links" id="whatsapp-nav-links">
+      <li><a href="/" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
           <polyline points="9 22 9 12 15 12 15 22"></polyline>
         </svg>Back to Store</a></li>
-      <li><a href="/proposal.html" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+      <li><a href="/proposal" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
           <polyline points="14 2 14 8 20 8"></polyline>
@@ -331,7 +349,7 @@ window.addEventListener('load', () => {
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>Proposal Info</a></li>
-      <li><a href="/admin.html" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+      <li><a href="/admin" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="1" x2="12" y2="23"></line>
           <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
@@ -339,6 +357,17 @@ window.addEventListener('load', () => {
     </ul>
     <div className="nav-icons">
       <div className="sim-badge"><span className="pulse"></span> Simulation Engine Online</div>
+      <div id="whatsapp-menu-toggle" className="whatsapp-menu-toggle" style={{"cursor":"pointer","display":"none","marginLeft":"15px"}}>
+        <svg className="icon-bars" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+        <svg className="icon-close" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{"display":"none"}}>
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </div>
     </div>
   </nav>
 
