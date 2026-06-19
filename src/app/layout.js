@@ -1,6 +1,5 @@
 import "./globals.css";
 import Script from "next/script";
-import WhatsAppFloating from "./components/WhatsAppFloating";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AppProvider } from "./context/AppContext";
@@ -32,7 +31,6 @@ export default function RootLayout({ children }) {
           <Navbar />
           {children}
           <Footer />
-          <WhatsAppFloating />
         </AppProvider>
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"
