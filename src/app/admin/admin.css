@@ -16,20 +16,24 @@
 }
 
 body.erp-page {
-  --bg-main: #0B0C10;
-  --bg-surface: #121216;
-  --bg-card: #181A20;
-  --text-main: #F3F4F6;
-  --text-muted: #9CA3AF;
-  --glass: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --bg-main: #FAF8F5;
+  --bg-surface: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --text-main: #2A2925;
+  --text-muted: #7E7B75;
+  --glass: rgba(26, 25, 23, 0.02);
+  --glass-border: #EAE6DF;
+  --primary: #9D7F54;
+  --primary-dark: #866B43;
+  --accent: #9D7F54;
 
   background-color: var(--bg-main) !important;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   color: var(--text-main) !important;
   background-image: none !important;
   background-attachment: fixed;
 }
+
 
 /* ERP Header Navigation Links */
 .erp-nav {

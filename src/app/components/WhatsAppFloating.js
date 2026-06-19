@@ -2,8 +2,8 @@
 
 import './WhatsAppFloating.css';
 import { useState, useEffect, useRef } from 'react';
-import { db } from '../../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { getProducts } from '../db';
+
 
 // ---- Constants ----
 const OCCASIONS = ['Birthday', 'Anniversary', 'Wedding', 'Diwali', 'Housewarming', 'Corporate', 'Baby Shower', 'Farewell'];
@@ -21,7 +21,6 @@ const INITIAL_GREETING = `Namaste! 🙏 Welcome to **Digify Gift Shop**.\n\nI'm 
 const QUICK_CHIPS = [
   { label: '🎁 Browse Gifts', query: 'browse gifts' },
   { label: '📦 Hamper Bundles', query: 'hamper bundles' },
-  { label: '🚚 Track Order', query: 'track order' },
   { label: '🥂 Wedding Gifts', query: 'wedding gifts' },
 ];
 
@@ -51,17 +50,9 @@ export default function WhatsAppFloating() {
   const inputRef = useRef(null);
   const hasShownGreeting = useRef(false);
 
-  // Firestore product listener
+  // Local product listener
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, 'products'),
-      (snap) => {
-        const prods = snap.docs.map((d) => d.data()).sort((a, b) => a.id - b.id);
-        setProducts(prods);
-      },
-      (err) => console.error('[Digify Chat] Firestore error:', err)
-    );
-    return () => unsub();
+    setProducts(getProducts());
   }, []);
 
   // Show greeting when chat opens (only once per session)
@@ -75,7 +66,19 @@ export default function WhatsAppFloating() {
     if (isOpen) {
       setHasUnread(false);
       setTimeout(() => inputRef.current?.focus(), 300);
+      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+        document.body.classList.add('modal-open');
+      }
+    } else {
+      if (typeof window !== 'undefined') {
+        document.body.classList.remove('modal-open');
+      }
     }
+    return () => {
+      if (typeof window !== 'undefined') {
+        document.body.classList.remove('modal-open');
+      }
+    };
   }, [isOpen]);
 
   // Auto-scroll
@@ -270,10 +273,16 @@ export default function WhatsAppFloating() {
           {extra.items.map((p) => (
             <a
               key={p.id}
-              href="/"
+              href={`#product-container`}
               className="chat-product-card"
               style={{ textDecoration: 'none' }}
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof window !== 'undefined' && window.openProductDetailsFromChat) {
+                  window.openProductDetailsFromChat(p.id);
+                  setIsOpen(false); // Optionally close chat
+                }
+              }}
             >
               <img
                 src={p.image}
@@ -288,7 +297,8 @@ export default function WhatsAppFloating() {
             </a>
           ))}
           <a
-            href="/"
+            href="#product-container"
+            onClick={() => setIsOpen(false)}
             style={{
               fontSize: '0.75rem',
               color: 'var(--chat-primary)',
