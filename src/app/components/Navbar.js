@@ -69,6 +69,7 @@ export default function Navbar() {
           <li><Link href="/" onClick={() => setMobileActive(false)}>Home</Link></li>
           <li><Link href="/catalog" onClick={() => setMobileActive(false)}>Shop Dining</Link></li>
           <li><Link href="/about" onClick={() => setMobileActive(false)}>Our Story</Link></li>
+          <li><Link href="/care" onClick={() => setMobileActive(false)}>Care Guide</Link></li>
           <li><Link href="/delivery" onClick={() => setMobileActive(false)}>Delivery & Shipping</Link></li>
           <li><Link href="/contact" onClick={() => setMobileActive(false)}>Contact</Link></li>
           

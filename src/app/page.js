@@ -9,6 +9,7 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [hoveredHotspot, setHoveredHotspot] = useState(null);
 
   // Filter 4 featured products to display on home page
   const featuredProducts = products
@@ -125,6 +126,99 @@ export default function Home() {
               <span className="category-link">Discover Organics &rarr;</span>
             </div>
           </Link>
+        </div>
+      </section>
+
+      {/* Shop the Look */}
+      <section className="section" style={{ backgroundColor: "var(--bg-main)" }}>
+        <div className="section-header">
+          <p className="section-subtitle">Get Inspired</p>
+          <h2 className="section-title">Shop The Look</h2>
+        </div>
+        <div className="shop-the-look-container">
+          <img src="/images/shop_the_look.png" alt="Luxury Dining Setup" className="shop-the-look-image" />
+          
+          {/* Hotspot 1: Bone China Set (Center Plate) */}
+          <div 
+            className="hotspot" 
+            style={{ top: '80%', left: '50%' }}
+            onMouseEnter={() => setHoveredHotspot(7)}
+            onMouseLeave={() => setHoveredHotspot(null)}
+            onClick={() => {
+              const prod = products.find(p => p.id === 7);
+              if (prod) setSelectedProduct(prod);
+            }}
+          >
+            <div className="hotspot-inner"></div>
+            <div className={`hotspot-tooltip ${hoveredHotspot === 7 ? 'active' : ''}`}>
+              <h4 className="hotspot-title">Premium Bone China Set</h4>
+              <span className="hotspot-price">₹299.00</span>
+              <button 
+                className="btn btn-primary btn-full btn-sm"
+                onClick={(e) => {
+                  const prod = products.find(p => p.id === 7);
+                  if (prod) handleAddToCart(prod, e);
+                }}
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+
+          {/* Hotspot 2: Crystal Wine Glass (Left Glass) */}
+          <div 
+            className="hotspot" 
+            style={{ top: '70%', left: '25%' }}
+            onMouseEnter={() => setHoveredHotspot(9)}
+            onMouseLeave={() => setHoveredHotspot(null)}
+            onClick={() => {
+              const prod = products.find(p => p.id === 9);
+              if (prod) setSelectedProduct(prod);
+            }}
+          >
+            <div className="hotspot-inner"></div>
+            <div className={`hotspot-tooltip ${hoveredHotspot === 9 ? 'active' : ''}`}>
+              <h4 className="hotspot-title">Crystal Wine Glass Set</h4>
+              <span className="hotspot-price">₹120.00</span>
+              <button 
+                className="btn btn-primary btn-full btn-sm"
+                onClick={(e) => {
+                  const prod = products.find(p => p.id === 9);
+                  if (prod) handleAddToCart(prod, e);
+                }}
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+
+          {/* Hotspot 3: Matte Ceramic Plates (Right side) */}
+          <div 
+            className="hotspot" 
+            style={{ top: '75%', left: '75%' }}
+            onMouseEnter={() => setHoveredHotspot(10)}
+            onMouseLeave={() => setHoveredHotspot(null)}
+            onClick={() => {
+              const prod = products.find(p => p.id === 10);
+              if (prod) setSelectedProduct(prod);
+            }}
+          >
+            <div className="hotspot-inner"></div>
+            <div className={`hotspot-tooltip ${hoveredHotspot === 10 ? 'active' : ''}`}>
+              <h4 className="hotspot-title">Matte Ceramic Plates</h4>
+              <span className="hotspot-price">₹85.00</span>
+              <button 
+                className="btn btn-primary btn-full btn-sm"
+                onClick={(e) => {
+                  const prod = products.find(p => p.id === 10);
+                  if (prod) handleAddToCart(prod, e);
+                }}
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+
         </div>
       </section>
 
