@@ -2,9 +2,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const { cartItemCount, wishlist } = useApp();
+  const { user, setShowLoginModal } = useAuth();
   const [mobileActive, setMobileActive] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -22,10 +24,7 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Premium Announcement Bar (Nestasia style) */}
-      <div className="announcement-bar">
-        <span>EST. 1994 &bull; FREE DELIVERY ON ORDERS ABOVE ₹999 &bull; SECURE CHECKOUT</span>
-      </div>
+
 
       <nav className={`${scrolled ? 'nav-scrolled' : ''}`}>
         {/* Hamburger Menu Toggle (Mobile) */}
@@ -72,23 +71,25 @@ export default function Navbar() {
           <li><Link href="/care" onClick={() => setMobileActive(false)}>Care Guide</Link></li>
           <li><Link href="/delivery" onClick={() => setMobileActive(false)}>Delivery & Shipping</Link></li>
           <li><Link href="/contact" onClick={() => setMobileActive(false)}>Contact</Link></li>
-          
-          <li className="nav-mobile-only">
-            <Link href="/admin" onClick={() => setMobileActive(false)} style={{display:"flex",alignItems:"center",gap:"8px"}}>
-              <i className="fa-solid fa-user-gear"></i> Admin Dashboard
-            </Link>
+          <li>
+            {user ? (
+              <Link 
+                href="/account"
+                className="nav-link-btn" 
+                onClick={() => setMobileActive(false)}
+              >
+                My Account
+              </Link>
+            ) : (
+              <Link href="/auth" className="nav-link-btn" onClick={() => setMobileActive(false)}>
+                Sign In / Sign Up
+              </Link>
+            )}
           </li>
         </ul>
 
         {/* Header Icons / Action Buttons */}
         <div className="nav-icons">
-          {/* Admin Dashboard link (Desktop) */}
-          <Link href="/admin" className="nav-icon-btn nav-desktop-only" title="Admin Portal">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-          </Link>
 
           {/* Wishlist Link */}
           <Link href="/catalog?wishlist=true" className="nav-icon-btn" title="Wishlist">

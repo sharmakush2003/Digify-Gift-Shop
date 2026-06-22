@@ -25,16 +25,18 @@ export default function Home() {
   const handleAddToCart = (product, e) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product, 1);
-    triggerToast(`Added ${product.name} to Cart`);
+    if (addToCart(product, 1)) {
+      triggerToast(`Added ${product.name} to Cart`);
+    }
   };
 
   const handleToggleWishlist = (product, e) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleWishlist(product);
-    const inWish = wishlist.some(item => item.id === product.id);
-    triggerToast(inWish ? `Removed ${product.name} from Wishlist` : `Saved ${product.name} to Wishlist`);
+    if (toggleWishlist(product)) {
+      const inWish = wishlist.some(item => item.id === product.id);
+      triggerToast(inWish ? `Removed ${product.name} from Wishlist` : `Saved ${product.name} to Wishlist`);
+    }
   };
 
   return (
@@ -45,7 +47,7 @@ export default function Home() {
           <p className="hero-subtitle">ORIENT CROCKERIES</p>
           <h1 className="hero-title">Dining Elevated</h1>
           <p className="hero-desc">
-            Est. 1994. Curating and crafting the world's finest dinnerware, professional cookware, and organic acacia woodcraft. For five-star hospitality and exquisite homes.
+            Est. 1994. Curating and crafting the world&apos;s finest dinnerware, professional cookware, and organic acacia woodcraft. For five-star hospitality and exquisite homes.
           </p>
           <div className="cta-group">
             <Link href="/catalog" className="btn btn-primary">
@@ -237,7 +239,7 @@ export default function Home() {
             The Art of Tablescaping
           </h2>
           <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem", lineHeight: "1.8" }}>
-            At Orient Crockeries, we believe every meal is a celebration. Over the last three decades, we have partnered with India's leading five-star hotels and fine dining establishments, providing plates, cups, and bowls that blend performance with high design.
+            At Orient Crockeries, we believe every meal is a celebration. Over the last three decades, we have partnered with India&apos;s leading five-star hotels and fine dining establishments, providing plates, cups, and bowls that blend performance with high design.
           </p>
           <p style={{ color: "var(--text-muted)", marginBottom: "2rem", lineHeight: "1.8" }}>
             Our select woodcraft collection is sourced from organic, sustainably harvested Acacia trees. Each board, mug, and casserole features natural grains and elegant finishes, bringing rustic luxury to your hospitality spreads.
@@ -322,7 +324,7 @@ export default function Home() {
         </div>
         <div style={{ maxWidth: "800px", margin: "0 auto" }}>
           <p style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontStyle: "italic", color: "var(--dark)", marginBottom: "2rem" }}>
-            "We have partnered with Orient Crockeries for the dining service at our premium resort. Their bespoke bone china plates and organic wood platters have completely elevated our presentation. Exceptionally durable and beautifully crafted."
+            &quot;We have partnered with Orient Crockeries for the dining service at our premium resort. Their bespoke bone china plates and organic wood platters have completely elevated our presentation. Exceptionally durable and beautifully crafted.&quot;
           </p>
           <span style={{ fontWeight: "600", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "2px", color: "var(--primary)" }}>
             &mdash; Executive Chef Rohit Sen, The Leela Regency

@@ -16,16 +16,16 @@
 }
 
 body.erp-page {
-  --bg-main: #FAF8F5;
-  --bg-surface: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --text-main: #2A2925;
-  --text-muted: #7E7B75;
-  --glass: rgba(26, 25, 23, 0.02);
-  --glass-border: #EAE6DF;
-  --primary: #9D7F54;
-  --primary-dark: #866B43;
-  --accent: #9D7F54;
+  --bg-main: #0B0C10;
+  --bg-surface: #1F2833;
+  --bg-card: #141A21;
+  --text-main: #FFFFFF;
+  --text-muted: #8E9BAE;
+  --glass: rgba(31, 40, 51, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --primary: #45A29E;
+  --primary-dark: #66FCF1;
+  --accent: #45A29E;
 
   background-color: var(--bg-main) !important;
   font-family: 'Montserrat', sans-serif;
@@ -697,7 +697,7 @@ body.erp-page {
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-main) 100%) !important;
-  z-index: 99999;
+  z-index: 900;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -8,11 +8,6 @@ import Link from 'next/link';
 export default function WhatsappPage() {
   const prevOrdersRef = useRef([]);
 
-  useEffect(() => {
-    document.body.classList.remove('preload');
-    initWhatsAppSim();
-  }, []);
-
   const initWhatsAppSim = () => {
     const chatArea = document.getElementById('sim-chat-area');
     const inputEl = document.getElementById('sim-input');
@@ -289,6 +284,11 @@ Our central database shows your shipment is *${o.courierStatus}*. 🚚`;
     };
   };
 
+  useEffect(() => {
+    document.body.classList.remove('preload');
+    initWhatsAppSim();
+  }, []);
+
   return (
     <>
       {/* Nav Bar */}
@@ -320,7 +320,7 @@ Our central database shows your shipment is *${o.courierStatus}*. 🚚`;
             <div className="sim-info-panel">
               <div className="section-tag">Sales &amp; Support Channel</div>
               <h2>WhatsApp Commerce API Simulation</h2>
-              <p>This smartphone mock represents a customer's WhatsApp app. It listens to operations performed on the <b>Storefront Checkout</b> and the <b>ERP Dashboard</b> to demonstrate automated notification pipelines.</p>
+              <p>This smartphone mock represents a customer&apos;s WhatsApp app. It listens to operations performed on the <b>Storefront Checkout</b> and the <b>ERP Dashboard</b> to demonstrate automated notification pipelines.</p>
               
               <div className="trigger-logs-card">
                 <h3>Event Logs &amp; Trigger Guide</h3>
@@ -336,7 +336,7 @@ Our central database shows your shipment is *${o.courierStatus}*. 🚚`;
                     <span className="guide-num">2</span>
                     <div>
                       <h4>Abandoned Cart Nudge (Automatic Trigger)</h4>
-                      <p>Click "Proceed to Checkout" in the store cart, fill fields, but close/close-out. In 15 seconds, a nudge message with a coupon code pings here.</p>
+                      <p>Click &quot;Proceed to Checkout&quot; in the store cart, fill fields, but close/close-out. In 15 seconds, a nudge message with a coupon code pings here.</p>
                     </div>
                   </li>
                   <li id="guide-erp">

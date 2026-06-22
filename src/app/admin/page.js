@@ -4,19 +4,22 @@ import React, { useState, useEffect } from "react";
 import { 
   getProducts, 
   saveProducts, 
-  getOrders, 
-  updateOrderStatus, 
   updateProduct
 } from "../db";
+import { db } from "../../firebase";
+import { collection, getDocs, doc, updateDoc, setDoc, getDoc } from "firebase/firestore";
+import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import "./admin.css";
 
 export default function AdminPage() {
+  const { login } = useAuth();
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
 
   // Tab & Search states
   const [activeTab, setActiveTab] = useState("orders"); // "orders" | "inventory"
@@ -51,19 +54,51 @@ export default function AdminPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
 
+  const loadDbData = async () => {
+    try {
+      const productsSnapshot = await getDocs(collection(db, "products"));
+      const productsData = productsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      // Sort products by ID or keep original order
+      productsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+      setProductsList(productsData);
+    } catch (e) {
+      console.error("Failed to load products from Firestore", e);
+      setProductsList(getProducts()); // Fallback
+    }
+    
+    try {
+      const ordersSnapshot = await getDocs(collection(db, "orders"));
+      const ordersData = ordersSnapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
+      ordersData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setOrdersList(ordersData);
+    } catch (e) {
+      console.error("Failed to load orders from Firestore", e);
+      setOrdersList([]); // Fallback
+    }
+  };
+
   useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
     // Check if session was active
     const wasLoggedIn = localStorage.getItem("orient_is_admin") === "true";
     if (wasLoggedIn) {
-      setIsLoggedIn(true);
+      if (window.innerWidth <= 768) {
+        localStorage.removeItem("orient_is_admin");
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIsLoggedIn(true);
+      }
     }
     loadDbData();
+    
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const loadDbData = () => {
-    setProductsList(getProducts());
-    setOrdersList(getOrders());
-  };
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -71,16 +106,33 @@ export default function AdminPage() {
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  // Mock authentication logic
-  const handleLogin = (e) => {
+  // Authentication logic
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (loginEmail.trim() === "admin@orient.com" && loginPassword === "admin123") {
-      setIsLoggedIn(true);
-      setAuthError("");
-      localStorage.setItem("orient_is_admin", "true");
-      triggerToast("Logged in successfully to Orient ERP");
-    } else {
-      setAuthError("Invalid administrator credentials. Access Denied.");
+    
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setAuthError("Admin portal is strictly restricted to laptops and desktops.");
+      return;
+    }
+
+    try {
+      const userCredential = await login(loginEmail, loginPassword);
+      if (userCredential && userCredential.user) {
+        const user = userCredential.user;
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const isAdmin = userDoc.exists() && userDoc.data().role === "admin";
+        
+        if (isAdmin) {
+          setIsLoggedIn(true);
+          setAuthError("");
+          localStorage.setItem("orient_is_admin", "true");
+          triggerToast("Logged in successfully to Orient ERP");
+        } else {
+          setAuthError("Account does not have administrator privileges.");
+        }
+      }
+    } catch (error) {
+      setAuthError("Invalid credentials. Access Denied.");
     }
   };
 
@@ -90,9 +142,23 @@ export default function AdminPage() {
     triggerToast("Logged out successfully");
   };
 
-  // Order status management
-  const handleProcessOrder = (orderId, nextStatus) => {
-    updateOrderStatus(orderId, nextStatus);
+  const handleProcessOrder = async (orderId, nextStatus, docId) => {
+    try {
+      if (docId) {
+        const orderRef = doc(db, "orders", docId);
+        const courierStatus = nextStatus === "Packed" ? "In Warehouse" : (nextStatus === "Shipped" ? "In Transit" : "Delivered");
+        const currentOrder = ordersList.find(o => o.id === orderId);
+        const paymentStatus = nextStatus === "Delivered" ? "Paid" : (currentOrder ? currentOrder.paymentStatus : "Paid");
+
+        await updateDoc(orderRef, {
+          status: nextStatus,
+          courierStatus,
+          paymentStatus
+        });
+      }
+    } catch (e) {
+      console.error("Failed to update order status", e);
+    }
     loadDbData();
     triggerToast(`Order ${orderId} marked as ${nextStatus}`);
   };
@@ -144,10 +210,19 @@ export default function AdminPage() {
       reviewCount: reviews.length
     };
 
-    updateProduct(editingProduct.id, updated);
-    loadDbData();
-    setEditingProduct(null);
-    triggerToast(`Updated Product: ${updated.name}`);
+    const updateProductInFirestore = async () => {
+      try {
+        await setDoc(doc(db, "products", String(updated.id)), updated, { merge: true });
+        loadDbData();
+        setEditingProduct(null);
+        triggerToast(`Updated Product: ${updated.name}`);
+      } catch (error) {
+        console.error("Error updating product in Firestore", error);
+        triggerToast("Failed to update product");
+      }
+    };
+    
+    updateProductInFirestore();
   };
 
   // Add review manually to product stock
@@ -210,16 +285,36 @@ export default function AdminPage() {
       reviews: []
     };
 
-    const combined = [...productsList, newCombo];
-    saveProducts(combined);
-    loadDbData();
-    setShowComboModal(false);
-    setNewComboName("");
-    setNewComboPrice("");
-    setNewComboStock("");
-    setNewComboImage("");
-    triggerToast(`Registered new Gift Hamper: ${newComboName}`);
+    const addComboToFirestore = async () => {
+      try {
+        await setDoc(doc(db, "products", String(newCombo.id)), newCombo);
+        loadDbData();
+        setShowComboModal(false);
+        setNewComboName("");
+        setNewComboPrice("");
+        setNewComboStock("");
+        setNewComboImage("");
+        triggerToast(`Registered new Gift Hamper: ${newComboName}`);
+      } catch (error) {
+        console.error("Error adding combo to Firestore", error);
+        triggerToast("Failed to add hamper");
+      }
+    };
+    
+    addComboToFirestore();
   };
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '20px', textAlign: 'center', background: 'var(--bg-main)' }}>
+        <div>
+          <i className="fa-solid fa-desktop" style={{ fontSize: '3rem', color: 'var(--primary)', marginBottom: '20px' }}></i>
+          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'white', marginBottom: '10px' }}>Desktop Only</h2>
+          <p style={{ color: 'var(--text-muted)' }}>The Admin portal is strictly restricted to laptops and desktops for security and layout reasons.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Render Authentication form if not logged in
   if (!isLoggedIn) {
@@ -261,9 +356,6 @@ export default function AdminPage() {
             <button type="submit" className="btn btn-primary" style={{ marginTop: "1rem" }}>
               Secure Credentials Login
             </button>
-            <p className="auth-toggle-text" style={{ fontSize: "0.75rem" }}>
-              Mock Admin Account: <b>admin@orient.com</b> | password: <b>admin123</b>
-            </p>
           </form>
         </div>
       </div>
@@ -388,7 +480,7 @@ export default function AdminPage() {
                               <button 
                                 className="btn btn-outline btn-sm" 
                                 style={{ borderColor: "#00aaff", color: "#00aaff" }}
-                                onClick={() => handleProcessOrder(order.id, "Packed")}
+                                onClick={() => handleProcessOrder(order.id, "Packed", order._docId)}
                               >
                                 <i className="fa-solid fa-box"></i> Pack SKU
                               </button>
@@ -397,7 +489,7 @@ export default function AdminPage() {
                               <button 
                                 className="btn btn-outline btn-sm" 
                                 style={{ borderColor: "var(--primary)", color: "var(--primary)" }}
-                                onClick={() => handleProcessOrder(order.id, "Shipped")}
+                                onClick={() => handleProcessOrder(order.id, "Shipped", order._docId)}
                               >
                                 <i className="fa-solid fa-truck-fast"></i> Ship BlueDart
                               </button>
@@ -406,7 +498,7 @@ export default function AdminPage() {
                               <button 
                                 className="btn btn-outline btn-sm" 
                                 style={{ borderColor: "var(--success)", color: "var(--success)" }}
-                                onClick={() => handleProcessOrder(order.id, "Delivered")}
+                                onClick={() => handleProcessOrder(order.id, "Delivered", order._docId)}
                               >
                                 <i className="fa-solid fa-circle-check"></i> Complete
                               </button>

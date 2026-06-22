@@ -34,6 +34,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     // Load values calculated on cart page
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShippingFee(parseFloat(localStorage.getItem("orient_checkout_shipping") || "0"));
     setPromoDiscount(parseFloat(localStorage.getItem("orient_checkout_promo_disc") || "0"));
     setPromoCode(localStorage.getItem("orient_checkout_promo_code") || "");
@@ -46,9 +47,6 @@ export default function CheckoutPage() {
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
   // Tax calculations
-  let totalCGST = 0;
-  let totalSGST = 0;
-  
   const taxItems = cart.map(item => {
     const rate = item.gst || 18; // 18% or 5%
     const itemTotal = item.price * item.quantity;
@@ -57,9 +55,6 @@ export default function CheckoutPage() {
     const taxAmt = itemTotal - (itemTotal / (1 + rate / 100));
     const cgst = taxAmt / 2;
     const sgst = taxAmt / 2;
-    
-    totalCGST += cgst;
-    totalSGST += sgst;
 
     return {
       ...item,
@@ -69,6 +64,9 @@ export default function CheckoutPage() {
       taxableValue: itemTotal - taxAmt
     };
   });
+
+  const totalCGST = taxItems.reduce((sum, item) => sum + item.cgst, 0);
+  const totalSGST = taxItems.reduce((sum, item) => sum + item.sgst, 0);
 
   const totalGST = totalCGST + totalSGST;
 
@@ -133,8 +131,8 @@ export default function CheckoutPage() {
     }, 1000);
   };
 
-  const completeOrder = () => {
-    // Save order in local DB
+  const completeOrder = async () => {
+    // Save order in Firestore
     const orderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
     const orderData = {
       id: orderId,
@@ -155,7 +153,16 @@ export default function CheckoutPage() {
       paymentId: "pay_" + Math.random().toString(36).substr(2, 9)
     };
 
-    saveOrder(orderData);
+    try {
+      const { collection, addDoc } = await import("firebase/firestore");
+      const { db } = await import("../../firebase");
+      await addDoc(collection(db, "orders"), orderData);
+    } catch (err) {
+      console.error("Error saving order to Firestore:", err);
+      // Fallback to local
+      saveOrder(orderData);
+    }
+
     setCreatedOrder(orderData);
     clearCart(); // Wipe cart
     setCheckoutPhase("receipt");

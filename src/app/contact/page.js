@@ -30,7 +30,7 @@ export default function ContactPage() {
         {/* Contact Information Side */}
         <div>
           <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.2rem", color: "var(--dark)", marginBottom: "1rem" }}>
-            We'd Love to Hear From You
+            We&apos;d Love to Hear From You
           </h2>
           <p style={{ color: "var(--text-muted)", marginBottom: "3rem", lineHeight: "1.8" }}>
             Have questions about customized crockery, bulk orders for hotels/restaurants, or home delivery? Reach out to our customer care team.

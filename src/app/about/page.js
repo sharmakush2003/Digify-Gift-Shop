@@ -29,13 +29,13 @@ export default function AboutPage() {
       <section className="section" style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "4rem", alignItems: "start" }}>
         <div>
           <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.8rem", color: "var(--dark)", marginBottom: "1.5rem" }}>
-            Jaipur's Complete Destination for Crockery &amp; Hospitality Solutions
+            Jaipur&apos;s Complete Destination for Crockery &amp; Hospitality Solutions
           </h3>
           <p style={{ color: "var(--text-main)", marginBottom: "1.2rem", lineHeight: "1.8" }}>
-            Welcome to Orient Crockeries, Jaipur's trusted destination for premium crockery, glassware, cutlery, kitchenware, and hospitality supplies. With over 35 years of experience in the crockery and hospitality industry, we have built a strong reputation for quality, reliability, competitive pricing, and exceptional customer service.
+            Welcome to Orient Crockeries, Jaipur&apos;s trusted destination for premium crockery, glassware, cutlery, kitchenware, and hospitality supplies. With over 35 years of experience in the crockery and hospitality industry, we have built a strong reputation for quality, reliability, competitive pricing, and exceptional customer service.
           </p>
           <p style={{ color: "var(--text-main)", marginBottom: "1.2rem", lineHeight: "1.8" }}>
-            Located in the heart of Jaipur's renowned 22 Godown Market, Orient Crockeries has been serving customers through its retail showroom for more than a decade, becoming a preferred choice for households, hotels, restaurants, cafés, caterers, banquet operators, institutions, corporate offices, retailers, and wholesalers across Rajasthan.
+            Located in the heart of Jaipur&apos;s renowned 22 Godown Market, Orient Crockeries has been serving customers through its retail showroom for more than a decade, becoming a preferred choice for households, hotels, restaurants, cafés, caterers, banquet operators, institutions, corporate offices, retailers, and wholesalers across Rajasthan.
           </p>
           <p style={{ color: "var(--text-main)", marginBottom: "1.2rem", lineHeight: "1.8" }}>
             As both wholesalers and retailers, we offer the unique advantage of extensive product variety at highly competitive prices. Our direct sourcing relationships with leading manufacturers and reputed brands enable us to provide genuine value without compromising on quality.
@@ -53,7 +53,7 @@ export default function AboutPage() {
             At Orient Crockeries, we believe that every dining experience deserves the perfect presentation. Whether you are furnishing a new home, upgrading your restaurant, sourcing products for a hotel, planning a special event, or purchasing in bulk for your business, we are committed to providing the finest products, widest selection, and best value under one roof.
           </p>
           <p style={{ color: "var(--text-main)", fontWeight: "600", fontSize: "1.05rem", fontStyle: "italic", borderLeft: "2px solid var(--primary)", paddingLeft: "15px", marginTop: "1.5rem" }}>
-            Orient Crockeries is more than a crockery store — it is Jaipur's complete destination for crockery, glassware, cutlery, hotelware, kitchenware, and hospitality solutions.
+            Orient Crockeries is more than a crockery store — it is Jaipur&apos;s complete destination for crockery, glassware, cutlery, hotelware, kitchenware, and hospitality solutions.
           </p>
         </div>
 

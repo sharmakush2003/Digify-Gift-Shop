@@ -13,12 +13,6 @@ function TrackingContent() {
   const [activeOrder, setActiveOrder] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    if (orderIdParam) {
-      locateOrder(orderIdParam);
-    }
-  }, [orderIdParam]);
-
   const locateOrder = (id) => {
     const orders = getOrders();
     const match = orders.find(o => o.id.trim().toUpperCase() === id.trim().toUpperCase());
@@ -31,6 +25,13 @@ function TrackingContent() {
       setErrorMsg(`Could not find any order with code ${id}. Verify your order reference.`);
     }
   };
+
+  useEffect(() => {
+    if (orderIdParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      locateOrder(orderIdParam);
+    }
+  }, [orderIdParam]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

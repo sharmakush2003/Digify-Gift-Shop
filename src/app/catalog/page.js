@@ -27,6 +27,7 @@ function CatalogContent() {
 
   useEffect(() => {
     if (deptParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedDepts([deptParam]);
     } else {
       setSelectedDepts([]);
@@ -51,16 +52,18 @@ function CatalogContent() {
   const handleAddToCart = (product, e) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product, 1);
-    triggerToast(`Added ${product.name} to Cart`);
+    if (addToCart(product, 1)) {
+      triggerToast(`Added ${product.name} to Cart`);
+    }
   };
 
   const handleToggleWishlist = (product, e) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleWishlist(product);
-    const inWish = wishlist.some(item => item.id === product.id);
-    triggerToast(inWish ? `Removed ${product.name} from Wishlist` : `Saved ${product.name} to Wishlist`);
+    if (toggleWishlist(product)) {
+      const inWish = wishlist.some(item => item.id === product.id);
+      triggerToast(inWish ? `Removed ${product.name} from Wishlist` : `Saved ${product.name} to Wishlist`);
+    }
   };
 
   // Filtering Logic

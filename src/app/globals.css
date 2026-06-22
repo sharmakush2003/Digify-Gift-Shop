@@ -151,7 +151,8 @@ nav {
   align-items: center;
 }
 
-.nav-links a {
+.nav-links a,
+.nav-links .nav-link-btn {
   position: relative;
   font-weight: 500;
   font-size: 0.85rem;
@@ -159,13 +160,21 @@ nav {
   text-transform: uppercase;
   letter-spacing: 1.5px;
   padding: 6px 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-block;
+  text-align: left;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-links .nav-link-btn:hover {
   color: var(--primary);
 }
 
-.nav-links a::after {
+.nav-links a::after,
+.nav-links .nav-link-btn::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -176,7 +185,8 @@ nav {
   transition: var(--transition);
 }
 
-.nav-links a:hover::after {
+.nav-links a:hover::after,
+.nav-links .nav-link-btn:hover::after {
   width: 100%;
 }
 

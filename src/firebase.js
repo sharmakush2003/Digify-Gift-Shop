@@ -3,12 +3,13 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBKuhP7CqLZJ74Q5ICoZsqXRn4-NbuDSiA",
-  authDomain: "crockery-website.firebaseapp.com",
-  projectId: "crockery-website",
-  storageBucket: "crockery-website.firebasestorage.app",
-  messagingSenderId: "257917390550",
-  appId: "1:257917390550:web:dd535acfb19ea8563b8377"
+  apiKey: "AIzaSyABkgMPNCDnTBnuCOnqx1JwA3ZKBqq50n4",
+  authDomain: "orient-crockeries.firebaseapp.com",
+  projectId: "orient-crockeries",
+  storageBucket: "orient-crockeries.firebasestorage.app",
+  messagingSenderId: "758606616031",
+  appId: "1:758606616031:web:590d48df12c12407b2e06a",
+  measurementId: "G-RZTVHSCW79"
 };
 
 const app = initializeApp(firebaseConfig);

@@ -3,6 +3,8 @@ import Script from "next/script";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AppProvider } from "./context/AppContext";
+import { AuthProvider } from "./context/AuthContext";
+import LoginModal from "./components/LoginModal";
 
 export const metadata = {
   title: "Orient Crockeries | Premium Hospitality & Dining Solutions",
@@ -27,11 +29,14 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="preload">
-        <AppProvider>
-          <Navbar />
-          {children}
-          <Footer />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider>
+            <Navbar />
+            <LoginModal />
+            {children}
+            <Footer />
+          </AppProvider>
+        </AuthProvider>
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"
           strategy="beforeInteractive"

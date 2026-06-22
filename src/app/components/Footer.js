@@ -15,7 +15,7 @@ export default function Footer() {
               <span className="footer-logo-tagline">Crockeries</span>
             </div>
             <p className="footer-brand-desc">
-              Curating and crafting the world's finest dinnerware, professional cookware, and organic acacia woodcraft for five-star hospitality and exquisite homes since 1994.
+              Curating and crafting the world&apos;s finest dinnerware, professional cookware, and organic acacia woodcraft for five-star hospitality and exquisite homes since 1994.
             </p>
             <div className="footer-socials">
               <a href="#" className="social-icon" aria-label="Instagram">

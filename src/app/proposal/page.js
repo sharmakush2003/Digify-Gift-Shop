@@ -2,6 +2,7 @@
 
 import './proposal.css';
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function ProposalPage() {
   useEffect(() => {
@@ -240,20 +241,20 @@ window.addEventListener('load', () => {
   <nav className="proposal-nav">
     <div className="logo">DIGISOFT <span className="badge">PROPOSAL</span></div>
     <ul className="nav-links" id="proposal-nav-links">
-      <li><a href="/" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+      <li><Link href="/" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
           <polyline points="9 22 9 12 15 12 15 22"></polyline>
-        </svg>Storefront</a></li>
-      <li><a href="/whatsapp" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+        </svg>Storefront</Link></li>
+      <li><Link href="/whatsapp" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-        </svg>WhatsApp Sim</a></li>
-      <li><a href="/admin" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
+        </svg>WhatsApp Sim</Link></li>
+      <li><Link href="/admin" style={{"display":"flex","alignItems":"center","gap":"4px"}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="1" x2="12" y2="23"></line>
           <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-        </svg>Admin ERP</a></li>
+        </svg>Admin ERP</Link></li>
     </ul>
     <div className="nav-icons">
       <div className="sim-badge" style={{"background":"rgba(197, 160, 89, 0.1)","color":"var(--primary)","padding":"6px 14px","borderRadius":"50px","fontSize":"0.8rem","fontWeight":"600","border":"1px solid rgba(197, 160, 89, 0.25)"}}>
@@ -865,8 +866,8 @@ window.addEventListener('load', () => {
       </div>
 
       <div className="cta-actions">
-        <a href="/" className="btn btn-primary btn-large">Accept Proposal</a>
-        <a href="/whatsapp" className="btn btn-outline btn-large">Try Simulator</a>
+        <Link href="/" className="btn btn-primary btn-large">Accept Proposal</Link>
+        <Link href="/whatsapp" className="btn btn-outline btn-large">Try Simulator</Link>
       </div>
     </div>
   </section>
