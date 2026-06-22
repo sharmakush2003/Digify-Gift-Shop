@@ -150,7 +150,6 @@ export default function AuthPage() {
 
           {isLogin && (
             <div className="auth-forgot" style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-              <a href="#">Forgot your password?</a>
               <Link href="/admin" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textDecoration: 'none', borderBottom: '1px dashed var(--text-muted)' }}>Login as Admin</Link>
             </div>
           )}
