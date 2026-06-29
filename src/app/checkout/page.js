@@ -377,51 +377,16 @@ export default function CheckoutPage() {
       {/* Payment Selection Phase */}
       {checkoutPhase === "payment_selection" && (
         <div style={{ padding: "4rem 2rem", background: "var(--bg-surface)", border: "1px solid var(--border)", maxWidth: "550px", margin: "0 auto", textAlign: "center" }}>
-          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1.5rem", color: "var(--dark)" }}>Select Payment Method</h2>
+          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1.5rem", color: "var(--dark)" }}>Complete Your Payment</h2>
           <p style={{ color: "var(--text-muted)", marginBottom: "2.5rem", fontSize: "1.1rem" }}>Amount to Pay: <b style={{ color: "var(--dark)" }}>₹{orderTotal.toFixed(2)}</b></p>
           
-          {isMobile ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem" }}>
-              <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "2px", fontWeight: "700", color: "var(--primary)", marginBottom: "0.5rem" }}>Detected UPI Apps</p>
-              
-              <a 
-                 href={`upi://pay?pa=orientcrockeries@upi&pn=Orient%20Crockeries&am=${orderTotal.toFixed(2)}&cu=INR`} 
-                 onClick={() => { setCheckoutPhase("paying"); setPaymentStatus("Awaiting confirmation from UPI App..."); setTimeout(completeOrder, 6000); }} 
-                 className="btn" 
-                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", border: "1px solid #4CAF50", color: "#4CAF50", background: "rgba(76, 175, 80, 0.05)" }}>
-                <i className="fa-brands fa-google-pay" style={{ fontSize: "1.8rem" }}></i> Open GPay / PhonePe / BHIM
-              </a>
+          <div style={{ marginBottom: "2.5rem", color: "var(--text-muted)", fontSize: "0.95rem", lineHeight: "1.6" }}>
+            <p>You will be securely redirected to Razorpay to complete your transaction.</p>
+            <p>All major Credit/Debit Cards, UPI, QR codes, and Netbanking are supported.</p>
+          </div>
 
-              <a 
-                 href={`paytmmp://pay?pa=orientcrockeries@upi&pn=Orient%20Crockeries&am=${orderTotal.toFixed(2)}&cu=INR`} 
-                 onClick={() => { setCheckoutPhase("paying"); setPaymentStatus("Awaiting confirmation from Paytm..."); setTimeout(completeOrder, 6000); }} 
-                 className="btn" 
-                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", border: "1px solid #00b9f5", color: "#00b9f5", background: "rgba(0, 185, 245, 0.05)" }}>
-                <i className="fa-solid fa-wallet" style={{ fontSize: "1.2rem" }}></i> Pay via Paytm
-              </a>
-              
-              <div style={{ margin: "1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>OR</span>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: "2.5rem" }}>
-              <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "2px", fontWeight: "700", color: "var(--primary)", marginBottom: "1rem" }}>Scan QR to Pay</p>
-              <div style={{ width: "160px", height: "160px", background: "var(--bg-main)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", borderRadius: "8px" }}>
-                 <i className="fa-solid fa-qrcode" style={{ fontSize: "5rem", color: "var(--primary)" }}></i>
-              </div>
-              <div style={{ margin: "2rem 0 1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>OR</span>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-              </div>
-            </div>
-          )}
-
-          <button onClick={initializeRazorpay} className="btn btn-primary btn-full">
-            Pay with Card / Netbanking
+          <button onClick={initializeRazorpay} className="btn btn-primary btn-full" style={{ padding: "1rem", fontSize: "1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
+            <i className="fa-solid fa-lock"></i> Proceed to Pay Securely
           </button>
         </div>
       )}
