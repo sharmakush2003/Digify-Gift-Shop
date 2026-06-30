@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "../context/AppContext";
 import { saveOrder } from "../db";
 import Link from "next/link";
+import Script from "next/script";
 
 export default function CheckoutPage() {
   const { cart, clearCart } = useApp();
@@ -117,6 +118,7 @@ export default function CheckoutPage() {
     );
   };
 
+<<<<<<< HEAD
   const simulatePayment = () => {
     setCheckoutPhase("paying");
     setPaymentStatus("Initializing Secure Payment Interface...");
@@ -131,7 +133,65 @@ export default function CheckoutPage() {
     }, 1000);
   };
 
-  const completeOrder = async () => {
+  const initializeRazorpay = async () => {
+    setCheckoutPhase("paying");
+    setPaymentStatus("Initializing Secure Payment Interface...");
+    
+    try {
+      const res = await fetch("/api/razorpay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: orderTotal }),
+      });
+      
+      const order = await res.json();
+      
+      if (order.error) {
+        alert("Failed to create order");
+        setCheckoutPhase("payment_selection");
+        return;
+      }
+      
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Enter the Key ID generated from the Dashboard
+        amount: order.amount,
+        currency: order.currency,
+        name: "Orient Crockeries",
+        description: "Secure Payment",
+        order_id: order.id,
+        handler: function (response) {
+          setPaymentStatus("Recording transaction and generating invoice...");
+          completeOrder(response.razorpay_payment_id);
+        },
+        prefill: {
+          name: name,
+          email: email,
+          contact: phone,
+        },
+        theme: {
+          color: "#18181b",
+        },
+        modal: {
+          ondismiss: function() {
+            setCheckoutPhase("payment_selection");
+          }
+        }
+      };
+
+      const rzp1 = new window.Razorpay(options);
+      rzp1.on("payment.failed", function (response) {
+        alert(response.error.description);
+        setCheckoutPhase("payment_selection");
+      });
+      rzp1.open();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load Razorpay checkout");
+      setCheckoutPhase("payment_selection");
+    }
+  };
+
+  const completeOrder = async (razorpayPaymentId = null) => {
     // Save order in Firestore
     const orderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
     const orderData = {
@@ -150,7 +210,7 @@ export default function CheckoutPage() {
       status: "Pending",
       courierStatus: "In Warehouse",
       paymentStatus: "Paid",
-      paymentId: "pay_" + Math.random().toString(36).substr(2, 9)
+      paymentId: razorpayPaymentId || ("pay_" + Math.random().toString(36).substr(2, 9))
     };
 
     try {
@@ -170,6 +230,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container" style={{ marginTop: "30px" }}>
+      <Script id="razorpay-checkout-js" src="https://checkout.razorpay.com/v1/checkout.js" />
       <h1 className="page-title">Secure Checkout</h1>
 
       {checkoutPhase === "billing" && (
@@ -374,8 +435,8 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          <button onClick={simulatePayment} className="btn btn-primary btn-full">
-            Pay with Card / Netbanking
+          <button onClick={initializeRazorpay} className="btn btn-primary btn-full" style={{ padding: "1rem", fontSize: "1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
+            <i className="fa-solid fa-lock"></i> Pay with Card / Netbanking (Razorpay)
           </button>
         </div>
       )}
