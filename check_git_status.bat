@@ -1,4 +1,4 @@
 @echo off
-title Git Sync - Digify-Gift-Shop
+title Master Git Sync - All App & Web Projects
 powershell -ExecutionPolicy Bypass -File "%~dp0check_git_status.ps1"
 pause
