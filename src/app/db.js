@@ -1,6 +1,6 @@
 import parsedProducts from './parsed_products.json';
 
-const CACHE_VERSION = '1.1';
+const CACHE_VERSION = '1.2';
 
 export const getProducts = () => {
   if (typeof window === 'undefined') return [...parsedProducts];
