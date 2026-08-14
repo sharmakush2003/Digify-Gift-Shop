@@ -1,11 +1,16 @@
 import parsedProducts from './parsed_products.json';
 
+const CACHE_VERSION = '1.1';
+
 export const getProducts = () => {
   if (typeof window === 'undefined') return [...parsedProducts];
   let data = localStorage.getItem('orient_products');
-  if (!data) {
+  let version = localStorage.getItem('orient_products_version');
+  
+  if (!data || version !== CACHE_VERSION) {
     const combined = [...parsedProducts];
     localStorage.setItem('orient_products', JSON.stringify(combined));
+    localStorage.setItem('orient_products_version', CACHE_VERSION);
     return combined;
   }
   return JSON.parse(data);
