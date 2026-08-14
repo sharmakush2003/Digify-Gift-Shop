@@ -3,8 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { getProducts } from "../db";
 import { useAuth } from "./AuthContext";
-import { db } from "../../firebase";
-import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { supabase } from "../../supabase";
 
 const AppContext = createContext();
 
@@ -19,19 +18,16 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "products"));
-        const productsData = [];
-        querySnapshot.forEach((doc) => {
-          productsData.push({ ...doc.data() });
-        });
+        const { data, error } = await supabase.from('products').select('*');
+        if (error) throw error;
         
-        if (productsData.length > 0) {
-          setProducts(productsData);
+        if (data && data.length > 0) {
+          setProducts(data);
         } else {
           setProducts(getProducts());
         }
       } catch (err) {
-        console.error("Error fetching products from Firestore:", err);
+        console.error("Error fetching products from Supabase:", err);
         setProducts(getProducts());
       }
     };
@@ -48,19 +44,18 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  // Sync user specific data from Firestore
+  // Sync user specific data from Supabase
   useEffect(() => {
     const fetchUserData = async () => {
       if (user) {
         try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
+          const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
+          if (data) {
             if (data.wishlist) setWishlist(data.wishlist);
             if (data.orders) setOrders(data.orders);
           }
         } catch (error) {
-          console.error("Error fetching user data from Firestore", error);
+          console.error("Error fetching user data from Supabase", error);
         }
       } else {
         // If logged out, load local wishlist if exists
@@ -83,28 +78,34 @@ export function AppProvider({ children }) {
     localStorage.setItem("orient_cart", JSON.stringify(cart));
   }, [cart]);
 
-  // Sync wishlist to Firestore/Local
+  // Sync wishlist to Supabase/Local
   useEffect(() => {
-    if (user) {
-      try {
-        setDoc(doc(db, "users", user.uid), { wishlist }, { merge: true });
-      } catch (error) {
-        console.error("Error syncing wishlist to Firestore", error);
+    const syncWishlist = async () => {
+      if (user) {
+        try {
+          await supabase.from('users').upsert({ id: user.id, wishlist });
+        } catch (error) {
+          console.error("Error syncing wishlist to Supabase", error);
+        }
+      } else {
+        localStorage.setItem("orient_wishlist", JSON.stringify(wishlist));
       }
-    } else {
-      localStorage.setItem("orient_wishlist", JSON.stringify(wishlist));
-    }
+    };
+    syncWishlist();
   }, [wishlist, user]);
 
-  // Sync orders to Firestore
+  // Sync orders to Supabase
   useEffect(() => {
-    if (user) {
-      try {
-        setDoc(doc(db, "users", user.uid), { orders }, { merge: true });
-      } catch (error) {
-        console.error("Error syncing orders to Firestore", error);
+    const syncOrders = async () => {
+      if (user) {
+        try {
+          await supabase.from('users').upsert({ id: user.id, orders });
+        } catch (error) {
+          console.error("Error syncing orders to Supabase", error);
+        }
       }
-    }
+    };
+    syncOrders();
   }, [orders, user]);
 
   // Cart operations

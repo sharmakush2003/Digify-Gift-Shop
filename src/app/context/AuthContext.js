@@ -1,14 +1,6 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
-import { auth } from '../../firebase';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut,
-  fetchSignInMethodsForEmail,
-  updateProfile
-} from 'firebase/auth';
+import { supabase } from '../../supabase';
 
 const AuthContext = createContext();
 
@@ -24,41 +16,62 @@ export function AuthProvider({ children }) {
   const [alertMessage, setAlertMessage] = useState('');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // Get initial session
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setLoading(false);
+    };
+
+    initializeAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = (email, password) => {
-    return signInWithEmailAndPassword(auth, email, password);
+  const login = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+    return data;
   };
 
   const signup = async (email, password, name) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    if (name) {
-      await updateProfile(userCredential.user, { displayName: name });
-      // Update local state to reflect the new display name immediately
-      setUser({ ...userCredential.user, displayName: name });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+        }
+      }
+    });
+    if (error) throw error;
+    // Set user with display name immediately if we have it
+    if (data?.user) {
+      setUser({ ...data.user, user_metadata: { full_name: name } });
     }
-    return userCredential;
+    return data;
   };
 
-  const logout = () => {
-    return signOut(auth);
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   };
 
   const checkEmailExists = async (email) => {
-    try {
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-      return methods.length > 0;
-    } catch (error) {
-      console.error("Error checking email:", error);
-      // Fallback: If email enumeration protection is enabled, it might throw or return empty.
-      // We'll return true to proceed to login and let login handle the invalid-credential error.
-      return true; 
-    }
+    // In Supabase, checking if email exists without admin rights is restricted by default for security.
+    // So we just return true to proceed to login and let login handle the error.
+    return true; 
   };
 
   const requireLogin = (customMessage) => {

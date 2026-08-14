@@ -42,17 +42,18 @@ export default function AuthPage() {
     } catch (err) {
       let errorMessage = 'Authentication failed. Please try again.';
       
-      // Map Firebase error codes to user-friendly messages
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        errorMessage = 'Invalid email or password. Please try again or create an account.';
-      } else if (err.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists.';
-      } else if (err.code === 'auth/weak-password') {
-        errorMessage = 'Password should be at least 6 characters.';
-      } else if (err.code === 'auth/invalid-email') {
-        errorMessage = 'Please enter a valid email address.';
+      // Map Supabase error messages
+      if (err.message) {
+        if (err.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please try again or create an account.';
+        } else if (err.message.includes('User already registered')) {
+          errorMessage = 'An account with this email already exists.';
+        } else if (err.message.includes('Password should be')) {
+          errorMessage = err.message;
+        } else {
+          errorMessage = err.message;
+        }
       } else {
-        // Only log unexpected errors
         console.error("Auth error:", err);
       }
       

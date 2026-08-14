@@ -214,11 +214,10 @@ export default function CheckoutPage() {
     };
 
     try {
-      const { collection, addDoc } = await import("firebase/firestore");
-      const { db } = await import("../../firebase");
-      await addDoc(collection(db, "orders"), orderData);
+      const { supabase } = await import("../../supabase");
+      await supabase.from("orders").insert(orderData);
     } catch (err) {
-      console.error("Error saving order to Firestore:", err);
+      console.error("Error saving order to Supabase:", err);
       // Fallback to local
       saveOrder(orderData);
     }

@@ -6,8 +6,7 @@ import {
   saveProducts, 
   updateProduct
 } from "../db";
-import { db } from "../../firebase";
-import { collection, getDocs, doc, updateDoc, setDoc, getDoc } from "firebase/firestore";
+import { supabase } from "../../supabase";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import "./admin.css";
@@ -56,23 +55,25 @@ export default function AdminPage() {
 
   const loadDbData = async () => {
     try {
-      const productsSnapshot = await getDocs(collection(db, "products"));
-      const productsData = productsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      const { data, error } = await supabase.from('products').select('*');
+      if (error) throw error;
+      let productsData = data || [];
       // Sort products by ID or keep original order
       productsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
       setProductsList(productsData);
     } catch (e) {
-      console.error("Failed to load products from Firestore", e);
+      console.error("Failed to load products from Supabase", e);
       setProductsList(getProducts()); // Fallback
     }
     
     try {
-      const ordersSnapshot = await getDocs(collection(db, "orders"));
-      const ordersData = ordersSnapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
+      const { data, error } = await supabase.from('orders').select('*');
+      if (error) throw error;
+      let ordersData = data || [];
       ordersData.sort((a, b) => new Date(b.date) - new Date(a.date));
       setOrdersList(ordersData);
     } catch (e) {
-      console.error("Failed to load orders from Firestore", e);
+      console.error("Failed to load orders from Supabase", e);
       setOrdersList([]); // Fallback
     }
   };
@@ -119,8 +120,8 @@ export default function AdminPage() {
       const userCredential = await login(loginEmail, loginPassword);
       if (userCredential && userCredential.user) {
         const user = userCredential.user;
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const isAdmin = userDoc.exists() && userDoc.data().role === "admin";
+        const { data: userData } = await supabase.from('users').select('*').eq('id', user.id).single();
+        const isAdmin = userData && userData.role === "admin";
         
         if (isAdmin) {
           setIsLoggedIn(true);
@@ -144,18 +145,15 @@ export default function AdminPage() {
 
   const handleProcessOrder = async (orderId, nextStatus, docId) => {
     try {
-      if (docId) {
-        const orderRef = doc(db, "orders", docId);
-        const courierStatus = nextStatus === "Packed" ? "In Warehouse" : (nextStatus === "Shipped" ? "In Transit" : "Delivered");
-        const currentOrder = ordersList.find(o => o.id === orderId);
-        const paymentStatus = nextStatus === "Delivered" ? "Paid" : (currentOrder ? currentOrder.paymentStatus : "Paid");
+      const courierStatus = nextStatus === "Packed" ? "In Warehouse" : (nextStatus === "Shipped" ? "In Transit" : "Delivered");
+      const currentOrder = ordersList.find(o => o.id === orderId);
+      const paymentStatus = nextStatus === "Delivered" ? "Paid" : (currentOrder ? currentOrder.paymentStatus : "Paid");
 
-        await updateDoc(orderRef, {
-          status: nextStatus,
-          courierStatus,
-          paymentStatus
-        });
-      }
+      await supabase.from('orders').update({
+        status: nextStatus,
+        courierStatus,
+        paymentStatus
+      }).eq('id', orderId);
     } catch (e) {
       console.error("Failed to update order status", e);
     }
@@ -210,19 +208,19 @@ export default function AdminPage() {
       reviewCount: reviews.length
     };
 
-    const updateProductInFirestore = async () => {
+    const updateProductInSupabase = async () => {
       try {
-        await setDoc(doc(db, "products", String(updated.id)), updated, { merge: true });
+        await supabase.from('products').upsert(updated);
         loadDbData();
         setEditingProduct(null);
         triggerToast(`Updated Product: ${updated.name}`);
       } catch (error) {
-        console.error("Error updating product in Firestore", error);
+        console.error("Error updating product in Supabase", error);
         triggerToast("Failed to update product");
       }
     };
     
-    updateProductInFirestore();
+    updateProductInSupabase();
   };
 
   // Add review manually to product stock
@@ -285,9 +283,9 @@ export default function AdminPage() {
       reviews: []
     };
 
-    const addComboToFirestore = async () => {
+    const addComboToSupabase = async () => {
       try {
-        await setDoc(doc(db, "products", String(newCombo.id)), newCombo);
+        await supabase.from('products').upsert(newCombo);
         loadDbData();
         setShowComboModal(false);
         setNewComboName("");
@@ -296,12 +294,12 @@ export default function AdminPage() {
         setNewComboImage("");
         triggerToast(`Registered new Gift Hamper: ${newComboName}`);
       } catch (error) {
-        console.error("Error adding combo to Firestore", error);
+        console.error("Error adding combo to Supabase", error);
         triggerToast("Failed to add hamper");
       }
     };
     
-    addComboToFirestore();
+    addComboToSupabase();
   };
 
   if (isMobile) {
