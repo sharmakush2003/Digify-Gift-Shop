@@ -423,10 +423,17 @@ export default function CheckoutPage() {
           ) : (
             <div style={{ marginBottom: "2.5rem" }}>
               <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "2px", fontWeight: "700", color: "var(--primary)", marginBottom: "1rem" }}>Scan QR to Pay</p>
-              <div style={{ width: "160px", height: "160px", background: "var(--bg-main)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", borderRadius: "8px" }}>
+              <div 
+                onClick={simulatePayment}
+                style={{ width: "160px", height: "160px", background: "var(--bg-main)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
+                title="Click to simulate payment (Developer Mode)"
+              >
                  <i className="fa-solid fa-qrcode" style={{ fontSize: "5rem", color: "var(--primary)" }}></i>
               </div>
-              <div style={{ margin: "2rem 0 1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+              <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "8px", cursor: "pointer", textDecoration: "underline" }} onClick={simulatePayment}>
+                (Click QR to Simulate Mock Payment)
+              </p>
+              <div style={{ margin: "1.5rem 0 1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
                 <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>OR</span>
                 <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
