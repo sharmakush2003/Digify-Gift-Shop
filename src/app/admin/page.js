@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import { 
   getProducts, 
   saveProducts, 
-  updateProduct
+  updateProduct,
+  getOrders,
+  updateOrderStatus
 } from "../db";
 import { supabase } from "../../supabase";
 import { useAuth } from "../context/AuthContext";
@@ -73,7 +75,7 @@ export default function AdminPage() {
       setOrdersList(ordersData);
     } catch (e) {
       console.warn("Failed to load orders from Supabase", e);
-      setOrdersList([]); // Fallback
+      setOrdersList(getOrders()); // Fallback
     }
   };
 
@@ -162,7 +164,8 @@ export default function AdminPage() {
         paymentStatus
       }).eq('id', orderId);
     } catch (e) {
-      console.error("Failed to update order status", e);
+      console.warn("Failed to update order status in Supabase", e);
+      updateOrderStatus(orderId, nextStatus); // Fallback
     }
     loadDbData();
     triggerToast(`Order ${orderId} marked as ${nextStatus}`);
