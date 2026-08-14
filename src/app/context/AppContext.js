@@ -27,7 +27,7 @@ export function AppProvider({ children }) {
           setProducts(getProducts());
         }
       } catch (err) {
-        console.error("Error fetching products from Supabase:", err);
+        console.warn("Error fetching products from Supabase:", err);
         setProducts(getProducts());
       }
     };

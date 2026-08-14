@@ -52,7 +52,6 @@ export default function AdminPage() {
   // Toast Notification states
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
-
   const loadDbData = async () => {
     try {
       const { data, error } = await supabase.from('products').select('*');
@@ -62,7 +61,7 @@ export default function AdminPage() {
       productsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
       setProductsList(productsData);
     } catch (e) {
-      console.error("Failed to load products from Supabase", e);
+      console.warn("Failed to load products from Supabase", e);
       setProductsList(getProducts()); // Fallback
     }
     
@@ -73,7 +72,7 @@ export default function AdminPage() {
       ordersData.sort((a, b) => new Date(b.date) - new Date(a.date));
       setOrdersList(ordersData);
     } catch (e) {
-      console.error("Failed to load orders from Supabase", e);
+      console.warn("Failed to load orders from Supabase", e);
       setOrdersList([]); // Fallback
     }
   };
