@@ -118,7 +118,7 @@ export default function CheckoutPage() {
     );
   };
 
-<<<<<<< HEAD
+
   const simulatePayment = () => {
     setCheckoutPhase("paying");
     setPaymentStatus("Initializing Secure Payment Interface...");
