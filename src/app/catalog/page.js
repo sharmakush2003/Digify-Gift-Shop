@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useApp } from "../context/AppContext";
 import Link from "next/link";
+import Image from "next/image";
 
 function CatalogContent() {
   const { products, addToCart, wishlist, toggleWishlist, isInWishlist } = useApp();
@@ -284,7 +285,14 @@ function CatalogContent() {
                     <div className="product-img-wrapper">
                       {product.stock <= 0 && <span className="product-badge out-stock">Out of Stock</span>}
                       {product.rating >= 4.9 && product.stock > 0 && <span className="product-badge">Premium Selection</span>}
-                      <img src={product.image} alt={product.name} className="product-image" />
+                      <Image 
+                        src={product.image} 
+                        alt={product.name} 
+                        fill 
+                        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                        className="product-image" 
+                        style={{ objectFit: 'cover' }}
+                      />
                       <button 
                         className={`wishlist-btn ${inWish ? "active" : ""}`}
                         onClick={(e) => handleToggleWishlist(product, e)}
@@ -325,16 +333,28 @@ function CatalogContent() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <img src={activeImage || selectedProduct.image} alt={selectedProduct.name} />
+              <div style={{ position: 'relative', width: '100%', height: '350px', flex: 1, minHeight: '300px' }}>
+                <Image 
+                  src={activeImage || selectedProduct.image} 
+                  alt={selectedProduct.name} 
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  style={{ objectFit: 'contain', padding: '1rem', backgroundColor: 'var(--bg-alt)' }}
+                  priority
+                />
+              </div>
               {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
-                <div className="thumbnail-gallery">
+                <div className="thumbnail-gallery" style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', width: '100%', justifyContent: 'center' }}>
                   {selectedProduct.images.map((img, idx) => (
-                    <img 
+                    <Image 
                       key={idx} 
                       src={img} 
                       alt={`${selectedProduct.name} - view ${idx + 1}`} 
+                      width={55}
+                      height={55}
                       className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
                       onClick={() => setActiveImage(img)}
+                      style={{ objectFit: 'cover', cursor: 'pointer', borderRadius: '6px' }}
                     />
                   ))}
                 </div>

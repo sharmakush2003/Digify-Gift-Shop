@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useApp } from "./context/AppContext";
 
 export default function Home() {
@@ -71,10 +72,16 @@ export default function Home() {
             </a>
           </div>
         </div>
-        <div 
-          className="hero-split-image" 
-          style={{ backgroundImage: `url('/images/crockery_dinner_set.png')` }}
-        ></div>
+        <div className="hero-split-image" style={{ position: 'relative' }}>
+          <Image 
+            src="/images/crockery_dinner_set.png" 
+            alt="Premium Dinnerware Collection"
+            fill
+            priority
+            sizes="50vw"
+            style={{ objectFit: 'cover' }}
+          />
+        </div>
       </section>
 
       {/* Trust Anchors */}
@@ -117,7 +124,7 @@ export default function Home() {
         <div className="category-grid">
           {/* Dining */}
           <Link href="/catalog?department=Crockery+%26+Dining" className="category-card">
-            <img src="/images/crockery_dinner_set.png" alt="Fine Dining" className="category-img" />
+            <Image src="/images/crockery_dinner_set.png" alt="Fine Dining" fill sizes="(max-width: 768px) 100vw, 33vw" className="category-img" style={{ objectFit: 'cover' }} />
             <div className="category-overlay">
               <h3 className="category-name">Fine Dining</h3>
               <span className="category-link">Discover Dinnerware &rarr;</span>
@@ -126,7 +133,7 @@ export default function Home() {
 
           {/* Cookware */}
           <Link href="/catalog?department=Cookware" className="category-card">
-            <img src="/images/stahl_hybrid_kadai.png" alt="Cookware" className="category-img" />
+            <Image src="/images/stahl_hybrid_kadai.png" alt="Cookware" fill sizes="(max-width: 768px) 100vw, 33vw" className="category-img" style={{ objectFit: 'cover' }} />
             <div className="category-overlay">
               <h3 className="category-name">Cookware</h3>
               <span className="category-link">Discover Culinary &rarr;</span>
@@ -135,7 +142,7 @@ export default function Home() {
 
           {/* Woodcraft */}
           <Link href="/catalog?department=Woodcraft" className="category-card">
-            <img src="/images/acacia_wood_casserole.png" alt="Woodcraft" className="category-img" />
+            <Image src="/images/acacia_wood_casserole.png" alt="Woodcraft" fill sizes="(max-width: 768px) 100vw, 33vw" className="category-img" style={{ objectFit: 'cover' }} />
             <div className="category-overlay">
               <h3 className="category-name">Acacia Woodcraft</h3>
               <span className="category-link">Discover Organics &rarr;</span>
@@ -151,7 +158,7 @@ export default function Home() {
           <h2 className="section-title">Shop The Look</h2>
         </div>
         <div className="shop-the-look-container">
-          <img src="/images/shop_the_look.png" alt="Luxury Dining Setup" className="shop-the-look-image" />
+          <Image src="/images/shop_the_look.png" alt="Luxury Dining Setup" width={1200} height={800} className="shop-the-look-image" style={{ width: '100%', height: 'auto', objectFit: 'cover' }} />
           
           {/* Hotspot 1: Bone China Set (Center Plate) */}
           <div 
@@ -240,11 +247,16 @@ export default function Home() {
       {/* Brand Heritage / Story */}
       <section className="section section-alt brand-heritage-layout">
         <div>
-          <img 
-            src="/images/customized.png" 
-            alt="Craftsmanship" 
-            className="heritage-img-element"
-          />
+          <div style={{ position: 'relative', width: '100%', height: '450px' }}>
+            <Image 
+              src="/images/customized.png" 
+              alt="Craftsmanship" 
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="heritage-img-element"
+              style={{ objectFit: 'cover' }}
+            />
+          </div>
         </div>
         <div style={{ paddingRight: "2rem" }}>
           <p className="section-subtitle" style={{ textAlign: "left" }}>SINCE 1994</p>
@@ -293,7 +305,14 @@ export default function Home() {
                 <div className="product-img-wrapper">
                   {product.stock <= 0 && <span className="product-badge out-stock">Out of Stock</span>}
                   {product.rating >= 4.9 && product.stock > 0 && <span className="product-badge">Best Seller</span>}
-                  <img src={product.image} alt={product.name} className="product-image" />
+                  <Image 
+                    src={product.image} 
+                    alt={product.name} 
+                    fill 
+                    sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                    className="product-image" 
+                    style={{ objectFit: 'cover' }}
+                  />
                   <button 
                     className={`wishlist-btn ${inWish ? "active" : ""}`}
                     onClick={(e) => handleToggleWishlist(product, e)}
@@ -353,16 +372,28 @@ export default function Home() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <img src={activeImage || selectedProduct.image} alt={selectedProduct.name} />
+              <div style={{ position: 'relative', width: '100%', height: '350px', flex: 1, minHeight: '300px' }}>
+                <Image 
+                  src={activeImage || selectedProduct.image} 
+                  alt={selectedProduct.name} 
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  style={{ objectFit: 'contain', padding: '1rem', backgroundColor: 'var(--bg-alt)' }}
+                  priority
+                />
+              </div>
               {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
-                <div className="thumbnail-gallery">
+                <div className="thumbnail-gallery" style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', width: '100%', justifyContent: 'center' }}>
                   {selectedProduct.images.map((img, idx) => (
-                    <img 
+                    <Image 
                       key={idx} 
                       src={img} 
                       alt={`${selectedProduct.name} - view ${idx + 1}`} 
+                      width={55}
+                      height={55}
                       className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
                       onClick={() => setActiveImage(img)}
+                      style={{ objectFit: 'cover', cursor: 'pointer', borderRadius: '6px' }}
                     />
                   ))}
                 </div>
