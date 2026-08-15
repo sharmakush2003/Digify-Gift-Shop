@@ -2144,3 +2144,31 @@ footer {
   border-color: var(--primary); 
   transform: translateY(-2px); 
 }
+
+@media (max-width: 768px) {
+  .modal-card {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-img-side {
+    height: 350px;
+    min-height: 350px;
+    width: 100%;
+  }
+  .modal-img-side > img:first-child {
+    height: 260px !important;
+  }
+  .modal-content-side {
+    padding: 1.5rem;
+  }
+  .modal-title {
+    font-size: 1.6rem;
+  }
+  .specs-grid {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+    padding: 1rem;
+  }
+}
