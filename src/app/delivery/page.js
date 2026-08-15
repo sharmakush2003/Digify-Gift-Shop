@@ -12,6 +12,7 @@ export default function DeliveryPortal() {
   const [activeTab, setActiveTab] = useState("assigned");
   const [loading, setLoading] = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [prevAssignedCount, setPrevAssignedCount] = useState(null);
   
   // Toast notifications state
   const [toastMessage, setToastMessage] = useState("");
@@ -32,20 +33,56 @@ export default function DeliveryPortal() {
     }
   }, [isAuthenticated, activeTab]);
 
-  const loadOrders = async () => {
-    setLoading(true);
+  // Periodic polling for live dispatch alerts
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const interval = setInterval(() => {
+      loadOrders(true); // Silent reload in background
+    }, 15000); // 15 seconds heartbeat
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const playAlertSound = () => {
+    try {
+      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav");
+      audio.volume = 0.8;
+      audio.play().catch(e => console.log("Audio alert blocked by browser autoplay policy:", e));
+    } catch (err) {
+      console.warn("Failed to play notification chime audio:", err);
+    }
+  };
+
+  const loadOrders = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const { data, error } = await supabase.from("orders").select("*");
       if (error) throw error;
 
       let fetchedOrders = data || [];
-      // Sort: newest first
       fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      // Filter assigned deliveries to monitor for new dispatches
+      const activeOrders = fetchedOrders.filter(
+        (o) => o.status === "Packed" || o.status === "Shipped" || o.status === "Pending"
+      );
+      const currentCount = activeOrders.length;
+
+      setPrevAssignedCount((prev) => {
+        // If count of assigned dispatches has increased, play alarm chime!
+        if (prev !== null && currentCount > prev) {
+          playAlertSound();
+          triggerToast("New Dispatch Order Assigned!");
+        }
+        return currentCount;
+      });
+
       setOrdersList(fetchedOrders);
     } catch (e) {
       console.error("Error loading delivery dispatches from Supabase:", e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -66,6 +103,7 @@ export default function DeliveryPortal() {
     setIsAuthenticated(false);
     sessionStorage.removeItem("orient_delivery_authenticated");
     setPinInput("");
+    setPrevAssignedCount(null);
   };
 
   const triggerToast = (msg) => {
@@ -147,6 +185,9 @@ export default function DeliveryPortal() {
     return (
       <div className="lock-screen-overlay">
         <form onSubmit={handleVerifyPin} className="lock-card">
+          <div className="lock-icon-header">
+            <i className="fa-solid fa-lock"></i>
+          </div>
           <div className="lock-logo">ORIENT</div>
           <div className="lock-subtitle">DELIVERY STAFF PORTAL</div>
           <input
