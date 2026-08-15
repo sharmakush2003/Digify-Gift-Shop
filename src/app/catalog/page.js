@@ -16,8 +16,8 @@ function CatalogContent() {
   const [selectedMicrowave, setSelectedMicrowave] = useState("all");
   const [sortOption, setSortOption] = useState("default");
   
-  // Modal & Toast States
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeImage, setActiveImage] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
 
@@ -266,7 +266,7 @@ function CatalogContent() {
                   <div 
                     key={product.id} 
                     className="product-card" 
-                    onClick={() => setSelectedProduct(product)}
+                    onClick={() => { setSelectedProduct(product); setActiveImage(null); }}
                     style={{ cursor: "pointer" }}
                   >
                     <div className="product-img-wrapper">
@@ -313,7 +313,20 @@ function CatalogContent() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <img src={selectedProduct.image} alt={selectedProduct.name} />
+              <img src={activeImage || selectedProduct.image} alt={selectedProduct.name} />
+              {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
+                <div className="thumbnail-gallery">
+                  {selectedProduct.images.map((img, idx) => (
+                    <img 
+                      key={idx} 
+                      src={img} 
+                      alt={`${selectedProduct.name} - view ${idx + 1}`} 
+                      className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
+                      onClick={() => setActiveImage(img)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="modal-content-side">
               <div className="modal-header">

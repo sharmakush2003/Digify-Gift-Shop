@@ -7,6 +7,7 @@ import { useApp } from "./context/AppContext";
 export default function Home() {
   const { products, addToCart, wishlist, toggleWishlist, isInWishlist } = useApp();
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [activeImage, setActiveImage] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [hoveredHotspot, setHoveredHotspot] = useState(null);
@@ -148,7 +149,7 @@ export default function Home() {
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {
               const prod = products.find(p => p.id === 7);
-              if (prod) setSelectedProduct(prod);
+              if (prod) { setSelectedProduct(prod); setActiveImage(null); }
             }}
           >
             <div className="hotspot-inner"></div>
@@ -175,7 +176,7 @@ export default function Home() {
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {
               const prod = products.find(p => p.id === 9);
-              if (prod) setSelectedProduct(prod);
+              if (prod) { setSelectedProduct(prod); setActiveImage(null); }
             }}
           >
             <div className="hotspot-inner"></div>
@@ -202,7 +203,7 @@ export default function Home() {
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {
               const prod = products.find(p => p.id === 10);
-              if (prod) setSelectedProduct(prod);
+              if (prod) { setSelectedProduct(prod); setActiveImage(null); }
             }}
           >
             <div className="hotspot-inner"></div>
@@ -274,7 +275,7 @@ export default function Home() {
               <div 
                 key={product.id} 
                 className="product-card" 
-                onClick={() => setSelectedProduct(product)}
+                onClick={() => { setSelectedProduct(product); setActiveImage(null); }}
                 style={{ cursor: "pointer" }}
               >
                 <div className="product-img-wrapper">
@@ -340,7 +341,20 @@ export default function Home() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <img src={selectedProduct.image} alt={selectedProduct.name} />
+              <img src={activeImage || selectedProduct.image} alt={selectedProduct.name} />
+              {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
+                <div className="thumbnail-gallery">
+                  {selectedProduct.images.map((img, idx) => (
+                    <img 
+                      key={idx} 
+                      src={img} 
+                      alt={`${selectedProduct.name} - view ${idx + 1}`} 
+                      className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
+                      onClick={() => setActiveImage(img)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="modal-content-side">
               <div className="modal-header">

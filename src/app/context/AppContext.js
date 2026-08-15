@@ -27,7 +27,7 @@ export function AppProvider({ children }) {
           setProducts(getProducts());
         }
       } catch (err) {
-        console.warn("Error fetching products from Supabase:", err);
+        console.error("CRITICAL: Error fetching products from Supabase in AppContext:", err);
         setProducts(getProducts());
       }
     };
@@ -199,3 +199,6 @@ export function useApp() {
   return useContext(AppContext);
 }
 
+
+// clear local storage on mount temporarily
+if (typeof window !== 'undefined') { localStorage.removeItem('orient_products'); }

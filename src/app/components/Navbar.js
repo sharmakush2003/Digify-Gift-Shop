@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,6 +10,11 @@ export default function Navbar() {
   const { user, setShowLoginModal } = useAuth();
   const [mobileActive, setMobileActive] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+
+  if (pathname && (pathname.startsWith('/admin'))) {
+    return null;
+  }
 
   useEffect(() => {
     const handleScroll = () => {

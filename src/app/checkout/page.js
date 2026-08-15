@@ -221,6 +221,24 @@ export default function CheckoutPage() {
       saveOrder(orderData);
     }
 
+    // Trigger Google Sheets Webhook
+    try {
+      const webhookUrl = "https://script.google.com/macros/s/AKfycbxIM1-jcgl3NUqhoYt7IQIHY9LI6z0IT7c3WI_ZSJwajYORUbgKLnTnw5GJLBbhj-OY8g/exec";
+      await fetch(webhookUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "create",
+          order: orderData
+        })
+      });
+    } catch (err) {
+      console.error("Error syncing to Google Sheets:", err);
+    }
+
     setCreatedOrder(orderData);
     clearCart(); // Wipe cart
     setCheckoutPhase("receipt");
@@ -389,60 +407,37 @@ export default function CheckoutPage() {
 
       {/* Payment Selection Phase */}
       {checkoutPhase === "payment_selection" && (
-        <div style={{ padding: "4rem 2rem", background: "var(--bg-surface)", border: "1px solid var(--border)", maxWidth: "550px", margin: "0 auto", textAlign: "center" }}>
-          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1.5rem", color: "var(--dark)" }}>Select Payment Method</h2>
-          <p style={{ color: "var(--text-muted)", marginBottom: "2.5rem", fontSize: "1.1rem" }}>Amount to Pay: <b style={{ color: "var(--dark)" }}>₹{orderTotal.toFixed(2)}</b></p>
+        <div style={{ padding: "4rem 2rem", background: "#ffffff", border: "1px solid #e0e0e0", maxWidth: "550px", margin: "2rem auto", textAlign: "center", borderRadius: "16px", boxShadow: "0 20px 40px rgba(0,0,0,0.08)" }}>
+          <div style={{ marginBottom: "2.5rem" }}>
+            <div style={{ width: "80px", height: "80px", background: "rgba(184, 134, 11, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem auto" }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.2rem", marginBottom: "0.5rem", color: "#111111", fontWeight: "600" }}>Secure Checkout</h2>
+            <p style={{ color: "#555555", fontSize: "1.05rem", letterSpacing: "0.5px" }}>Complete your purchase securely via Razorpay</p>
+          </div>
           
-          {isMobile ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem" }}>
-              <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "2px", fontWeight: "700", color: "var(--primary)", marginBottom: "0.5rem" }}>Detected UPI Apps</p>
-              
-              <a 
-                 href={`upi://pay?pa=orientcrockeries@upi&pn=Orient%20Crockeries&am=${orderTotal.toFixed(2)}&cu=INR`} 
-                 onClick={() => { setCheckoutPhase("paying"); setPaymentStatus("Awaiting confirmation from UPI App..."); setTimeout(completeOrder, 6000); }} 
-                 className="btn" 
-                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", border: "1px solid #4CAF50", color: "#4CAF50", background: "rgba(76, 175, 80, 0.05)" }}>
-                <i className="fa-brands fa-google-pay" style={{ fontSize: "1.8rem" }}></i> Open GPay / PhonePe / BHIM
-              </a>
-
-              <a 
-                 href={`paytmmp://pay?pa=orientcrockeries@upi&pn=Orient%20Crockeries&am=${orderTotal.toFixed(2)}&cu=INR`} 
-                 onClick={() => { setCheckoutPhase("paying"); setPaymentStatus("Awaiting confirmation from Paytm..."); setTimeout(completeOrder, 6000); }} 
-                 className="btn" 
-                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", border: "1px solid #00b9f5", color: "#00b9f5", background: "rgba(0, 185, 245, 0.05)" }}>
-                <i className="fa-solid fa-wallet" style={{ fontSize: "1.2rem" }}></i> Pay via Paytm
-              </a>
-              
-              <div style={{ margin: "1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>OR</span>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: "2.5rem" }}>
-              <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "2px", fontWeight: "700", color: "var(--primary)", marginBottom: "1rem" }}>Scan QR to Pay</p>
-              <div 
-                onClick={simulatePayment}
-                style={{ width: "160px", height: "160px", background: "var(--bg-main)", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}
-                title="Click to simulate payment (Developer Mode)"
-              >
-                 <i className="fa-solid fa-qrcode" style={{ fontSize: "5rem", color: "var(--primary)" }}></i>
-              </div>
-              <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "8px", cursor: "pointer", textDecoration: "underline" }} onClick={simulatePayment}>
-                (Click QR to Simulate Mock Payment)
-              </p>
-              <div style={{ margin: "1.5rem 0 1.5rem 0", color: "var(--border)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>OR</span>
-                <span style={{ width: "40px", height: "1px", background: "var(--border)" }}></span>
-              </div>
-            </div>
-          )}
-
-          <button onClick={initializeRazorpay} className="btn btn-primary btn-full" style={{ padding: "1rem", fontSize: "1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
-            <i className="fa-solid fa-lock"></i> Pay with Card / Netbanking (Razorpay)
+          <div style={{ background: "#fcfaf8", padding: "2rem", borderRadius: "12px", border: "1px dashed var(--primary)", marginBottom: "2.5rem" }}>
+            <p style={{ color: "#666666", fontSize: "0.95rem", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: "0.5rem", fontWeight: "600" }}>Amount to Pay</p>
+            <h3 style={{ fontSize: "3rem", fontFamily: "var(--font-serif)", color: "#111111", margin: "0", fontWeight: "700" }}>₹{orderTotal.toFixed(2)}</h3>
+          </div>
+          
+          <button onClick={initializeRazorpay} className="btn" style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.3rem", fontSize: "1.1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", borderRadius: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", boxShadow: "0 8px 20px rgba(184, 134, 11, 0.3)", border: "none", cursor: "pointer", transition: "transform 0.2s ease" }}>
+            <i className="fa-solid fa-lock" style={{ fontSize: "1.2rem" }}></i> PROCEED TO PAY SECURELY
           </button>
+          
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginTop: "2rem", color: "#666666", fontSize: "1.2rem" }}>
+            <i className="fa-brands fa-cc-visa" title="Visa"></i>
+            <i className="fa-brands fa-cc-mastercard" title="Mastercard"></i>
+            <i className="fa-brands fa-google-pay" title="GPay"></i>
+            <i className="fa-brands fa-apple-pay" title="Apple Pay"></i>
+            <i className="fa-solid fa-building-columns" title="Netbanking"></i>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "1rem", color: "#888888", fontSize: "0.8rem", fontWeight: "500" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>100% Secure &amp; Encrypted Payments</span>
+          </div>
         </div>
       )}
 

@@ -11,6 +11,8 @@ import {
 import { supabase } from "../../supabase";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
+import imageCompression from "browser-image-compression";
+import Papa from "papaparse";
 import "./admin.css";
 
 export default function AdminPage() {
@@ -54,6 +56,19 @@ export default function AdminPage() {
   // Toast Notification states
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+
+  // Bulk Upload states
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [bulkImages, setBulkImages] = useState([]);
+  const [bulkCsvFile, setBulkCsvFile] = useState(null);
+  const [bulkUploadStatus, setBulkUploadStatus] = useState("");
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+
+  // Single Upload states
+  const [singleUploadImages, setSingleUploadImages] = useState([]);
+  const [isSingleUploading, setIsSingleUploading] = useState(false);
+  const [singleUploadStatus, setSingleUploadStatus] = useState("");
+
   const loadDbData = async () => {
     try {
       const { data, error } = await supabase.from('products').select('*');
@@ -163,6 +178,27 @@ export default function AdminPage() {
         courierStatus,
         paymentStatus
       }).eq('id', orderId);
+
+      // Trigger Google Sheets Webhook Update
+      try {
+        const webhookUrl = "https://script.google.com/macros/s/AKfycbxIM1-jcgl3NUqhoYt7IQIHY9LI6z0IT7c3WI_ZSJwajYORUbgKLnTnw5GJLBbhj-OY8g/exec";
+        await fetch(webhookUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "update",
+            orderId: orderId,
+            status: nextStatus,
+            courierStatus: courierStatus,
+            paymentStatus: paymentStatus
+          })
+        });
+      } catch (err) {
+        console.error("Error syncing update to Google Sheets:", err);
+      }
     } catch (e) {
       console.warn("Failed to update order status in Supabase", e);
       updateOrderStatus(orderId, nextStatus); // Fallback
@@ -176,8 +212,15 @@ export default function AdminPage() {
   const pendingOrdersCount = ordersList.filter(o => o.status !== "Delivered").length;
   const lowStockCount = productsList.filter(p => p.stock < 5).length;
 
-  // Filters for order listing
+  // Cutoff date for recent orders (48 hours ago)
+  const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+  const cutoffDate = new Date(Date.now() - TWO_DAYS_MS);
+
+  // Filters for order listing (Only last 2 days)
   const filteredOrders = ordersList.filter(order => {
+    const orderDate = new Date(order.date);
+    if (orderDate < cutoffDate) return false;
+
     const matchesSearch = order.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
                           order.customerName.toLowerCase().includes(orderSearch.toLowerCase());
     
@@ -188,6 +231,44 @@ export default function AdminPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const exportOrdersToCSV = () => {
+    // Export all past orders (older than 48 hours)
+    const pastOrders = ordersList.filter(o => new Date(o.date) < cutoffDate);
+    
+    if (pastOrders.length === 0) {
+      triggerToast("No past orders available for export.");
+      return;
+    }
+
+    const headers = ["Order ID", "Customer Name", "Date", "Invoice Total", "Status", "Courier Status"];
+    const csvRows = [];
+    csvRows.push(headers.join(","));
+
+    for (const order of pastOrders) {
+      const row = [
+        order.id,
+        `"${order.customerName}"`,
+        `"${new Date(order.date).toLocaleString()}"`,
+        order.total,
+        order.status,
+        order.courierStatus
+      ];
+      csvRows.push(row.join(","));
+    }
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement("a");
+    a.setAttribute("hidden", "");
+    a.setAttribute("href", url);
+    a.setAttribute("download", `past_orders_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // Filters for products inventory
   const filteredProducts = productsList.filter(p => 
     p.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
@@ -196,9 +277,30 @@ export default function AdminPage() {
   );
 
   // Edit stock update
-  const handleUpdateProduct = (e) => {
+  const handleUpdateProduct = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
+    
+    setIsSingleUploading(true);
+    setSingleUploadStatus("Uploading images...");
+    
+    let uploadedImageUrls = [...(editingProduct.images || [])];
+    
+    if (singleUploadImages && singleUploadImages.length > 0) {
+      for (let i = 0; i < singleUploadImages.length; i++) {
+        const file = singleUploadImages[i];
+        const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
+        try {
+          const compressedFile = await imageCompression(file, options);
+          const fileName = `${Date.now()}_${file.name}`;
+          const { error } = await supabase.storage.from('product-images').upload(fileName, compressedFile, { cacheControl: '3600', upsert: false });
+          if (!error) {
+            const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+            uploadedImageUrls.push(publicUrlData.publicUrl);
+          }
+        } catch (err) { console.error("Upload error:", err); }
+      }
+    }
 
     // Calculate ratings based on edited review entries
     const reviews = editingProduct.reviews || [];
@@ -223,10 +325,13 @@ export default function AdminPage() {
         await supabase.from('products').upsert(updated);
         loadDbData();
         setEditingProduct(null);
+        setSingleUploadImages([]);
+        setIsSingleUploading(false);
         triggerToast(`Updated Product: ${updated.name}`);
       } catch (error) {
         console.error("Error updating product in Supabase", error);
         triggerToast("Failed to update product");
+        setIsSingleUploading(false);
       }
     };
     
@@ -264,11 +369,32 @@ export default function AdminPage() {
   };
 
   // Add combo hamper
-  const handleAddCombo = (e) => {
+  const handleAddCombo = async (e) => {
     e.preventDefault();
     if (!newComboName || !newComboPrice || !newComboStock) {
       alert("Please fill in core hamper details.");
       return;
+    }
+
+    setIsSingleUploading(true);
+    setSingleUploadStatus("Uploading images...");
+    
+    let uploadedImageUrls = [];
+    
+    if (singleUploadImages && singleUploadImages.length > 0) {
+      for (let i = 0; i < singleUploadImages.length; i++) {
+        const file = singleUploadImages[i];
+        const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
+        try {
+          const compressedFile = await imageCompression(file, options);
+          const fileName = `${Date.now()}_${file.name}`;
+          const { error } = await supabase.storage.from('product-images').upload(fileName, compressedFile, { cacheControl: '3600', upsert: false });
+          if (!error) {
+            const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+            uploadedImageUrls.push(publicUrlData.publicUrl);
+          }
+        } catch (err) { console.error("Upload error:", err); }
+      }
     }
 
     const newId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id)) + 1 : 101;
@@ -290,8 +416,12 @@ export default function AdminPage() {
       description: "Luxurious curated dining hamper by Orient Crockeries.",
       rating: 5.0,
       reviewCount: 0,
-      reviews: []
+      reviews: [],
+      images: uploadedImageUrls.length > 0 ? uploadedImageUrls : (newComboImage ? [newComboImage] : [])
     };
+    if (uploadedImageUrls.length > 0) {
+      newCombo.image = uploadedImageUrls[0];
+    }
 
     const addComboToSupabase = async () => {
       try {
@@ -302,14 +432,146 @@ export default function AdminPage() {
         setNewComboPrice("");
         setNewComboStock("");
         setNewComboImage("");
+        setSingleUploadImages([]);
+        setIsSingleUploading(false);
         triggerToast(`Registered new Gift Hamper: ${newComboName}`);
       } catch (error) {
         console.error("Error adding combo to Supabase", error);
         triggerToast("Failed to add hamper");
+        setIsSingleUploading(false);
       }
     };
     
     addComboToSupabase();
+  };
+
+  const handleBulkUploadSubmit = async () => {
+    if (!bulkCsvFile) {
+      alert("Please upload the CSV file first.");
+      return;
+    }
+    setIsBulkUploading(true);
+    setBulkUploadStatus("Starting bulk process...");
+
+    try {
+      // 1. Process & Upload Images
+      const uploadedImageUrls = {}; // Map of filename -> URL
+      
+      if (bulkImages && bulkImages.length > 0) {
+        for (let i = 0; i < bulkImages.length; i++) {
+          setBulkUploadStatus(`Uploading photo ${i + 1} of ${bulkImages.length}... please wait`);
+          const file = bulkImages[i];
+          const options = {
+            maxSizeMB: 0.2, // Compress to 200KB max
+            maxWidthOrHeight: 800,
+            useWebWorker: true,
+          };
+          
+          try {
+            const compressedFile = await imageCompression(file, options);
+            const fileName = `${Date.now()}_${file.name}`;
+            
+            const { data, error } = await supabase.storage
+              .from('product-images')
+              .upload(fileName, compressedFile, {
+                cacheControl: '3600',
+                upsert: false
+              });
+              
+            if (error) {
+              console.error("Error uploading image:", error);
+              continue; // Skip failed image
+            }
+            
+            const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+            uploadedImageUrls[file.name] = publicUrlData.publicUrl;
+            
+          } catch (err) {
+            console.error("Compression error:", err);
+          }
+        }
+      }
+
+      // 2. Parse CSV
+      setBulkUploadStatus("Parsing CSV file...");
+      Papa.parse(bulkCsvFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const rows = results.data;
+          setBulkUploadStatus(`Found ${rows.length} products. Linking images and saving to database...`);
+          
+          const newProducts = rows.map((row, index) => {
+            const newId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id)) + 1 + index : 101 + index;
+            let finalImageUrl = "/images/acacia_wood_casserole.png"; // fallback
+            let finalImageUrls = [];
+            
+            const exactMatch = row.Image_File_Name && uploadedImageUrls[row.Image_File_Name];
+            if (exactMatch) {
+              finalImageUrl = uploadedImageUrls[row.Image_File_Name];
+              finalImageUrls.push(finalImageUrl);
+            } else {
+              // Fuzzy match based on SKU ID (handles 201_1.webp, 201_2.webp, etc.)
+              const fuzzyKeys = Object.keys(uploadedImageUrls).filter(key => key.includes(String(row.id)));
+              if (fuzzyKeys.length > 0) {
+                fuzzyKeys.sort(); // Sort to keep 201_1 before 201_2
+                finalImageUrls = fuzzyKeys.map(key => uploadedImageUrls[key]);
+                finalImageUrl = finalImageUrls[0];
+              }
+            }
+
+            return {
+              id: parseInt(row.id) || newId,
+              name: row.name || "Untitled Product",
+              price: parseFloat(row.price) || 0,
+              stock: parseInt(row.stock) || 0,
+              image: finalImageUrl,
+              images: finalImageUrls,
+              department: row.department || "Crockery & Dining",
+              category: row.category || "Serveware",
+              subCategory: row.subCategory || "Plates",
+              fragile: row.fragile === "true" || row.fragile === "TRUE" || row.fragile === true,
+              microwave: row.microwave === "true" || row.microwave === "TRUE" || row.microwave === true,
+              barcode: row.barcode || "000" + Math.floor(Math.random() * 900000 + 100000),
+              hsn: row.hsn || "9505",
+              gst: parseFloat(row.gst) || 18,
+              soldCount: parseInt(row.soldCount) || 0,
+              description: row.description || "Luxurious dining product by Orient Crockeries.",
+              rating: parseFloat(row.rating) || 5.0,
+              reviewCount: parseInt(row.reviewCount) || 0,
+              reviews: []
+            };
+          });
+
+          // 3. Batch Insert to Supabase
+          try {
+             const { error } = await supabase.from('products').upsert(newProducts);
+             if (error) throw error;
+             
+             loadDbData();
+             setShowBulkUploadModal(false);
+             setBulkImages([]);
+             setBulkCsvFile(null);
+             triggerToast(`Successfully bulk imported ${newProducts.length} products!`);
+          } catch (dbError) {
+             console.error("Database insert error:", dbError);
+             setBulkUploadStatus("Error saving to database. Check console.");
+          } finally {
+             setIsBulkUploading(false);
+          }
+        },
+        error: (err) => {
+          console.error("CSV Parse Error:", err);
+          setBulkUploadStatus("Error parsing CSV.");
+          setIsBulkUploading(false);
+        }
+      });
+      
+    } catch (err) {
+      console.error("Bulk upload general error:", err);
+      setBulkUploadStatus("An unexpected error occurred.");
+      setIsBulkUploading(false);
+    }
   };
 
   if (isMobile) {
@@ -371,18 +633,58 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="erp-page" style={{ marginTop: "60px", minHeight: "100vh", backgroundColor: "var(--bg-main)", paddingBottom: "5rem" }}>
-      {/* Announcement/Header Stats Bar */}
-      <div className="erp-dashboard-header" style={{ padding: "4rem 6% 2rem 6%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-          <div>
-            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.5rem" }}>DigiSoft ERP Dashboard</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Orient Crockeries Operations Registry &bull; Local Storage Mode</p>
+    <div className="erp-layout">
+      <aside className="erp-sidebar">
+        <div className="sidebar-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <i className="fa-solid fa-layer-group" style={{ fontSize: '1.5rem', color: 'var(--primary)' }}></i>
+            <h2>Orient Admin</h2>
           </div>
-          <button className="btn btn-outline btn-sm" onClick={handleLogout}>
-            <i className="fa-solid fa-right-from-bracket"></i> Logout Portal
-          </button>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600' }}>by Digify Soft Solution</span>
         </div>
+        <nav className="sidebar-nav">
+          <div className="sidebar-nav-item">
+            <i className="fa-solid fa-house"></i>
+            <span>Home Dashboard</span>
+          </div>
+          <div 
+            className={`sidebar-nav-item ${activeTab === 'orders' ? 'active' : ''}`}
+            onClick={() => setActiveTab('orders')}
+          >
+            <i className="fa-solid fa-cart-shopping"></i>
+            <span>Orders Queue</span>
+          </div>
+          <div 
+            className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('inventory')}
+          >
+            <i className="fa-solid fa-boxes-stacked"></i>
+            <span>Inventory</span>
+          </div>
+          <div className="sidebar-nav-item">
+            <i className="fa-solid fa-users"></i>
+            <span>Customers</span>
+          </div>
+          <div className="sidebar-nav-item">
+            <i className="fa-solid fa-chart-pie"></i>
+            <span>Reports</span>
+          </div>
+          <div className="sidebar-nav-item" onClick={handleLogout} style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
+            <i className="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+          </div>
+        </nav>
+      </aside>
+
+      <main className="erp-main-content">
+        {/* Header Stats Bar */}
+        <div className="erp-dashboard-header">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+            <div>
+              <h2>Orient Crockery Product Management System</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Operations Registry &bull; Local Storage Mode</p>
+            </div>
+          </div>
 
         {/* Metric widgets grid */}
         <div className="erp-metrics-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
@@ -404,22 +706,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Tabs list */}
-      <div className="erp-main-section" style={{ padding: "0 6%" }}>
-        <div className="erp-tabs">
-          <button 
-            className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
-            onClick={() => setActiveTab("orders")}
-          >
-            <i className="fa-solid fa-dolly"></i> Orders Queue
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === "inventory" ? "active" : ""}`}
-            onClick={() => setActiveTab("inventory")}
-          >
-            <i className="fa-solid fa-boxes-stacked"></i> Inventory Registry
-          </button>
-        </div>
+      <div className="erp-main-section" style={{ padding: "20px 0" }}>
 
         {/* Tab 1: Orders Queue */}
         {activeTab === "orders" && (
@@ -429,7 +716,14 @@ export default function AdminPage() {
                 <h3>Shipment Dispatches Queue</h3>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
               </div>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button 
+                  className="btn btn-outline btn-sm" 
+                  onClick={exportOrdersToCSV}
+                  style={{ height: '38px' }}
+                >
+                  <i className="fa-solid fa-file-csv"></i> Export Past Orders
+                </button>
                 <select 
                   className="sort-select"
                   value={orderFilter}
@@ -476,7 +770,7 @@ export default function AdminPage() {
                       <tr key={order.id}>
                         <td style={{ fontWeight: "700" }}>{order.id}</td>
                         <td style={{ fontWeight: "600" }}>{order.customerName}</td>
-                        <td>{new Date(order.date).toLocaleDateString()}</td>
+                        <td>{new Date(order.date).toLocaleString("en-IN", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                         <td>₹{order.total.toFixed(2)}</td>
                         <td>
                           <span className={`status-pill ${order.status.toLowerCase()}`}>{order.status}</span>
@@ -545,6 +839,9 @@ export default function AdminPage() {
                   value={inventorySearch}
                   onChange={(e) => setInventorySearch(e.target.value)}
                 />
+                <button className="btn btn-outline btn-sm" onClick={() => setShowBulkUploadModal(true)} style={{ borderColor: "var(--primary)", color: "var(--primary)" }}>
+                  <i className="fa-solid fa-file-import"></i> Bulk Import
+                </button>
                 <button className="btn btn-primary btn-sm" onClick={() => setShowComboModal(true)}>
                   <i className="fa-solid fa-circle-plus"></i> Create Gift Hamper
                 </button>
@@ -609,12 +906,14 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      </main>
+      {/* Modals are placed below main */}
 
       {/* Edit Product Modal Form */}
       {editingProduct && (
-        <div className="modal-overlay active" onClick={() => setEditingProduct(null)}>
+        <div className="modal-overlay active" onClick={() => { setEditingProduct(null); setSingleUploadImages([]); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "900px", gridTemplateColumns: "1.2fr 1fr" }}>
-            <button className="modal-close-btn" onClick={() => setEditingProduct(null)}>
+            <button className="modal-close-btn" onClick={() => { setEditingProduct(null); setSingleUploadImages([]); }}>
               <i className="fa-solid fa-xmark"></i>
             </button>
             
@@ -691,6 +990,34 @@ export default function AdminPage() {
                     <option value="Home Décor">Home Décor</option>
                   </select>
                 </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label">Product Description</span>
+                  <textarea 
+                    className="form-input" 
+                    rows="3"
+                    placeholder="Enter detailed description here..."
+                    value={editingProduct.description || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                    style={{ resize: "vertical", width: "100%" }}
+                  />
+                </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label">Upload Additional Images</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
+                    disabled={isSingleUploading}
+                    className="form-input"
+                    style={{ paddingTop: "6px" }}
+                  />
+                  {singleUploadImages.length > 0 && (
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.75rem", color: "var(--primary)" }}>
+                      {singleUploadImages.length} image(s) selected
+                    </p>
+                  )}
+                </div>
                 <div className="form-group full-width" style={{ flexDirection: "row", gap: "20px", marginTop: "10px" }}>
                   <label className="filter-checkbox-label">
                     <input 
@@ -711,8 +1038,8 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-full">
-                Save Product Changes
+              <button type="submit" className="btn btn-primary btn-full" disabled={isSingleUploading}>
+                {isSingleUploading ? "Saving..." : "Save Product Changes"}
               </button>
             </form>
 
@@ -787,9 +1114,9 @@ export default function AdminPage() {
 
       {/* Gift Hamper / Combo Modal */}
       {showComboModal && (
-        <div className="modal-overlay active" onClick={() => setShowComboModal(false)}>
+        <div className="modal-overlay active" onClick={() => { setShowComboModal(false); setSingleUploadImages([]); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "550px", gridTemplateColumns: "1fr" }}>
-            <button className="modal-close-btn" onClick={() => setShowComboModal(false)}>
+            <button className="modal-close-btn" onClick={() => { setShowComboModal(false); setSingleUploadImages([]); }}>
               <i className="fa-solid fa-xmark"></i>
             </button>
             <form onSubmit={handleAddCombo} className="modal-content-side">
@@ -830,16 +1157,32 @@ export default function AdminPage() {
                     onChange={(e) => setNewComboStock(e.target.value)} 
                   />
                 </div>
-                <div className="form-group full-width">
-                  <span className="form-label">Image URL Path</span>
+                  <span className="form-label">Upload Product Images</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
+                    disabled={isSingleUploading}
+                    className="form-input"
+                    style={{ paddingTop: "6px" }}
+                  />
+                  {singleUploadImages.length > 0 && (
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.75rem", color: "var(--primary)" }}>
+                      {singleUploadImages.length} image(s) selected
+                    </p>
+                  )}
+                </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label">Or Image URL Path</span>
                   <input 
                     type="text" 
                     className="form-input" 
                     placeholder="/images/acacia_wood_casserole.png"
                     value={newComboImage} 
                     onChange={(e) => setNewComboImage(e.target.value)} 
+                    disabled={singleUploadImages.length > 0}
                   />
-                </div>
                 <div className="form-group">
                   <span className="form-label">Department</span>
                   <select 
@@ -866,8 +1209,8 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-full">
-                Register in Database
+              <button type="submit" className="btn btn-primary btn-full" disabled={isSingleUploading}>
+                {isSingleUploading ? "Registering..." : "Register in Database"}
               </button>
             </form>
           </div>
@@ -959,6 +1302,87 @@ export default function AdminPage() {
                 </button>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Upload Modal */}
+      {showBulkUploadModal && (
+        <div className="modal-overlay active" onClick={() => !isBulkUploading && setShowBulkUploadModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px", gridTemplateColumns: "1fr" }}>
+            {!isBulkUploading && (
+              <button className="modal-close-btn" onClick={() => setShowBulkUploadModal(false)}>
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+            
+            <div className="modal-content-side">
+              <span className="modal-meta-label">Advanced Tools</span>
+              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "1rem" }}>Bulk Import Products</h2>
+              
+              <div style={{ background: "rgba(184, 134, 11, 0.05)", padding: "15px", borderRadius: "8px", border: "1px dashed var(--primary)", marginBottom: "1.5rem" }}>
+                <h4 style={{ margin: "0 0 10px 0", color: "var(--dark)", fontSize: "1rem" }}><i className="fa-solid fa-circle-info" style={{ color: "var(--primary)" }}></i> Instructions</h4>
+                <ol style={{ margin: 0, paddingLeft: "20px", fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: "1.6" }}>
+                  <li>Name your product images exactly as their SKU IDs (e.g. <b>201.jpg</b> or <b>201.png</b>).</li>
+                  <li>Select all your images at once in Step 1. The system will automatically compress them and upload them.</li>
+                  <li>Select your formatted CSV file in Step 2.</li>
+                  <li>Click "Start Bulk Import". Please do not close the window while it is uploading.</li>
+                </ol>
+              </div>
+
+              <div className="form-group full-width" style={{ marginBottom: "1.5rem" }}>
+                <label className="form-label">Step 1: Upload Images (Multiple allowed)</label>
+                <div style={{ border: "1px solid var(--border)", padding: "10px", borderRadius: "8px", background: "var(--bg-surface)" }}>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/png, image/jpeg, image/jpg"
+                    onChange={(e) => setBulkImages(Array.from(e.target.files))}
+                    disabled={isBulkUploading}
+                    style={{ width: "100%", fontSize: "0.9rem" }}
+                  />
+                  {bulkImages.length > 0 && (
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.8rem", color: "var(--primary)", fontWeight: "600" }}>
+                      {bulkImages.length} image(s) selected for auto-compression.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-group full-width" style={{ marginBottom: "2rem" }}>
+                <label className="form-label">Step 2: Upload CSV File</label>
+                <div style={{ border: "1px solid var(--border)", padding: "10px", borderRadius: "8px", background: "var(--bg-surface)" }}>
+                  <input 
+                    type="file" 
+                    accept=".csv"
+                    onChange={(e) => setBulkCsvFile(e.target.files[0])}
+                    disabled={isBulkUploading}
+                    style={{ width: "100%", fontSize: "0.9rem" }}
+                  />
+                  {bulkCsvFile && (
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.8rem", color: "var(--primary)", fontWeight: "600" }}>
+                      {bulkCsvFile.name} ready for import.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {bulkUploadStatus && (
+                <div style={{ padding: "10px", marginBottom: "1rem", borderRadius: "4px", background: "var(--bg-main)", border: "1px solid var(--border)", fontSize: "0.85rem", textAlign: "center" }}>
+                  {isBulkUploading ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: "8px", color: "var(--primary)" }}></i> : null}
+                  {bulkUploadStatus}
+                </div>
+              )}
+
+              <button 
+                className="btn btn-primary btn-full" 
+                onClick={handleBulkUploadSubmit}
+                disabled={isBulkUploading || !bulkCsvFile}
+                style={{ opacity: (isBulkUploading || !bulkCsvFile) ? 0.6 : 1 }}
+              >
+                {isBulkUploading ? "Processing..." : "Start Bulk Import"}
+              </button>
             </div>
           </div>
         </div>
