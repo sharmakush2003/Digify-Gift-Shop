@@ -12,6 +12,7 @@ export default function AccountPage() {
   const router = useRouter();
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [viewingOrders, setViewingOrders] = useState(false);
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -23,8 +24,11 @@ export default function AccountPage() {
     if (!orders || orders.length === 0) {
       triggerToast("There is no order by your account, please order something to view the history.");
     } else {
-      // In the future, this can open a modal or route to an orders page
-      triggerToast("Loading your order history...");
+      setViewingOrders(true);
+      setTimeout(() => {
+        const el = document.getElementById("order-history-section");
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -105,6 +109,45 @@ export default function AccountPage() {
         </div>
 
       </div>
+
+      {/* Orders List Section */}
+      {viewingOrders && orders && orders.length > 0 && (
+        <div id="order-history-section" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem 4rem 2rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2rem', marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>Your Past Orders</h2>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {orders.map((order, i) => (
+              <div key={order.id || i} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '8px', padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', boxShadow: 'var(--shadow-sm)' }}>
+                <div>
+                  <h4 style={{ margin: '0 0 5px 0', fontSize: '1.2rem', fontFamily: 'var(--font-serif)' }}>Order #{order.id}</h4>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>{new Date(order.date).toLocaleDateString()} at {new Date(order.date).toLocaleTimeString()}</p>
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status</p>
+                  <span style={{ background: 'rgba(212, 175, 55, 0.1)', color: 'var(--primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>{order.status || 'Pending'}</span>
+                </div>
+                
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Total</p>
+                  <h4 style={{ margin: 0, fontSize: '1.2rem' }}>₹{Number(order.total).toFixed(2)}</h4>
+                </div>
+                
+                <div style={{ width: '100%', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border)' }}>
+                  <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', fontWeight: '600' }}>Items ({order.items?.length || 0}):</p>
+                  <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' }}>
+                    {order.items?.map((item, idx) => (
+                      <div key={idx} style={{ minWidth: '200px', background: 'var(--bg-alt)', padding: '10px', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <b style={{ color: 'var(--primary)' }}>{item.quantity}x</b> {item.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showToast && (
         <div style={{

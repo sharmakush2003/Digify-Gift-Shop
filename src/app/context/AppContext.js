@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { getProducts } from "../db";
+import { getProducts, getOrders } from "../db";
 import { useAuth } from "./AuthContext";
 import { supabase } from "../../supabase";
 
@@ -10,11 +10,33 @@ const AppContext = createContext();
 export function AppProvider({ children }) {
   const { requireLogin, user } = useAuth();
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [wishlist, setWishlist] = useState([]);
+  const [cart, setCart] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("orient_cart");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse cart on init", e);
+        }
+      }
+    }
+    return [];
+  });
+  const [wishlist, setWishlist] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("orient_wishlist");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [orders, setOrders] = useState([]);
 
-  // Load products & customer/cart/wishlist states on mount
+  // Load products states on mount
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -33,15 +55,6 @@ export function AppProvider({ children }) {
     };
     
     fetchProducts();
-
-    const savedCart = localStorage.getItem("orient_cart");
-    if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (e) {
-        console.error("Failed to parse cart", e);
-      }
-    }
   }, []);
 
   // Sync user specific data from Supabase
@@ -52,7 +65,19 @@ export function AppProvider({ children }) {
           const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
           if (data) {
             if (data.wishlist) setWishlist(data.wishlist);
-            if (data.orders) setOrders(data.orders);
+          }
+          
+          // Fetch orders for this user
+          const { data: dbOrders } = await supabase.from('orders').select('*').eq('customerEmail', user.email);
+          if (dbOrders && dbOrders.length > 0) {
+            // Sort by most recent
+            const sorted = dbOrders.sort((a,b) => new Date(b.date) - new Date(a.date));
+            setOrders(sorted);
+          } else {
+            // Fallback to local storage matching user's email
+            const localOrders = getOrders();
+            const userOrders = localOrders.filter(o => o.customerEmail === user.email);
+            setOrders(userOrders);
           }
         } catch (error) {
           console.error("Error fetching user data from Supabase", error);

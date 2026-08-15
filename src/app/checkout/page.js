@@ -22,9 +22,7 @@ export default function CheckoutPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zip, setZip] = useState("");
+  const [area, setArea] = useState("");
   const [isDetecting, setIsDetecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -73,7 +71,7 @@ export default function CheckoutPage() {
 
   const handleSubmitBilling = (e) => {
     e.preventDefault();
-    if (!name || !email || !phone || !street || !city || !state || !zip) {
+    if (!name || !email || !phone || !street || !area) {
       alert("Please fill in all shipping fields.");
       return;
     }
@@ -86,6 +84,7 @@ export default function CheckoutPage() {
       return;
     }
 
+    alert("Please manually verify the auto-detected location details after detection completes.");
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -95,11 +94,14 @@ export default function CheckoutPage() {
           const data = await res.json();
           if (data && data.address) {
             const addr = data.address;
-            const streetLine = [addr.building, addr.road, addr.suburb, addr.neighbourhood].filter(Boolean).join(", ");
+            const streetLine = [addr.building, addr.road].filter(Boolean).join(", ");
             setStreet(streetLine || data.display_name || "");
-            setCity(addr.city || addr.town || addr.village || addr.state_district || "");
-            setState(addr.state || "");
-            setZip(addr.postcode || "");
+            
+            // Try to match area
+            const detectedArea = addr.suburb || addr.neighbourhood || addr.residential || "";
+            if (detectedArea) {
+              setArea(detectedArea);
+            }
           } else {
             alert("Could not detect address details. Please enter manually.");
           }
@@ -199,7 +201,7 @@ export default function CheckoutPage() {
       customerName: name,
       customerPhone: phone,
       customerEmail: email,
-      shippingAddress: `${street}, ${city}, ${state} - ${zip}`,
+      shippingAddress: `${street}, ${area}, Jaipur, Rajasthan`,
       items: cart,
       subtotal: subtotal,
       shipping: shippingFee,
@@ -245,14 +247,23 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="container" style={{ marginTop: "30px" }}>
+    <div className="container" style={{ marginTop: "30px", minWidth: 0 }}>
       <Script id="razorpay-checkout-js" src="https://checkout.razorpay.com/v1/checkout.js" />
       <h1 className="page-title">Secure Checkout</h1>
 
       {checkoutPhase === "billing" && (
         <div className="checkout-layout">
           {/* Shipping Form */}
-          <form onSubmit={handleSubmitBilling} className="checkout-card">
+          <form onSubmit={handleSubmitBilling} className="checkout-card" style={{ minWidth: 0 }}>
+            <div style={{ marginBottom: "1rem" }}>
+              <button 
+                type="button"
+                onClick={() => router.push('/cart')}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem" }}
+              >
+                <i className="fa-solid fa-arrow-left"></i> Back to Cart
+              </button>
+            </div>
             <h2 className="checkout-section-title">Shipping &amp; Billing Details</h2>
             
             <div className="form-grid">
@@ -320,86 +331,115 @@ export default function CheckoutPage() {
                   onChange={(e) => setStreet(e.target.value)}
                 ></textarea>
               </div>
-              <div className="form-group">
-                <span className="form-label">City</span>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  value={city} 
-                  onChange={(e) => setCity(e.target.value)} 
-                />
-              </div>
-              <div className="form-group">
-                <span className="form-label">State</span>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
-                  value={state} 
-                  onChange={(e) => setState(e.target.value)} 
-                />
-              </div>
               <div className="form-group full-width">
-                <span className="form-label">ZIP / Postal Code</span>
-                <input 
-                  type="text" 
+                <span className="form-label">Area (Jaipur Only)</span>
+                <select 
                   className="form-input" 
                   required 
-                  value={zip} 
-                  onChange={(e) => setZip(e.target.value)} 
-                />
+                  value={area} 
+                  onChange={(e) => setArea(e.target.value)} 
+                >
+                  <option value="" disabled>Select your area...</option>
+                  <option value="Adarsh Nagar">Adarsh Nagar</option>
+                  <option value="Ajmer Road">Ajmer Road</option>
+                  <option value="Bani Park">Bani Park</option>
+                  <option value="Bapu Nagar">Bapu Nagar</option>
+                  <option value="C-Scheme">C-Scheme</option>
+                  <option value="Civil Lines">Civil Lines</option>
+                  <option value="Gandhi Nagar">Gandhi Nagar</option>
+                  <option value="Gopalpura">Gopalpura</option>
+                  <option value="Jagatpura">Jagatpura</option>
+                  <option value="Jhotwara">Jhotwara</option>
+                  <option value="Kalwar Road">Kalwar Road</option>
+                  <option value="Malviya Nagar">Malviya Nagar</option>
+                  <option value="Mansarovar">Mansarovar</option>
+                  <option value="Pratap Nagar">Pratap Nagar</option>
+                  <option value="Raja Park">Raja Park</option>
+                  <option value="Shyam Nagar">Shyam Nagar</option>
+                  <option value="Sitapura">Sitapura</option>
+                  <option value="Sodala">Sodala</option>
+                  <option value="Tonk Road">Tonk Road</option>
+                  <option value="Vaishali Nagar">Vaishali Nagar</option>
+                  <option value="Vidyadhar Nagar">Vidyadhar Nagar</option>
+                  <option value="Other">Other Area</option>
+                </select>
               </div>
             </div>
             
             <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: "2rem" }}>
               Proceed to Payment &bull; ₹{orderTotal.toFixed(2)}
             </button>
-          </form>
-
-          {/* Pricing Summary Side column */}
-          <aside className="cart-summary-box">
-            <h2 className="summary-title">Review Invoice Details</h2>
+          </form>          {/* Pricing Summary Side column */}
+          <aside className="cart-summary-box" style={{ 
+            minWidth: 0, 
+            background: "linear-gradient(to bottom, #fffaf0, #ffffff)", 
+            border: "1px solid #d4af37", 
+            borderRadius: "12px",
+            boxShadow: "0 8px 24px rgba(212, 175, 55, 0.15)",
+            padding: "2rem",
+            position: "relative",
+            overflow: "hidden"
+          }}>
+            {/* Decorative top border */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "4px", background: "var(--primary)" }}></div>
             
-            <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "1.5rem" }}>
+            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+              <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.8rem", color: "var(--primary)", margin: 0, letterSpacing: "1px" }}>ORIENT CROCKERIES</h2>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "2px", marginTop: "4px" }}>Premium Order Summary</p>
+            </div>
+            
+            <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "1.5rem", paddingRight: "5px" }}>
               {taxItems.map(item => (
-                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.85rem" }}>
-                  <span>{item.name} <b>x{item.quantity}</b></span>
-                  <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", fontSize: "0.9rem", alignItems: "center" }}>
+                  <span style={{ color: "#333", fontWeight: "500" }}>{item.name} <span style={{ color: "var(--primary)", fontSize: "0.8rem", marginLeft: "4px" }}>x{item.quantity}</span></span>
+                  <span style={{ fontWeight: "600" }}>₹{(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
             </div>
 
-            <div className="summary-row" style={{ borderTop: "1px dashed var(--border)", paddingTop: "1rem" }}>
-              <span>Taxable Value (Before Taxes)</span>
-              <span>₹{(subtotal - totalGST).toFixed(2)}</span>
+            <div style={{ borderTop: "2px dashed #e0e0e0", paddingTop: "1.5rem", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem" }}>
+                <span style={{ color: "#555" }}>Taxable Value (Before Taxes)</span>
+                <span style={{ fontWeight: "600" }}>₹{(subtotal - totalGST).toFixed(2)}</span>
+              </div>
+              
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.85rem", color: "#888" }}>
+                <span>Central GST (CGST)</span>
+                <span>₹{totalCGST.toFixed(2)}</span>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.85rem", color: "#888" }}>
+                <span>State GST (SGST)</span>
+                <span>₹{totalSGST.toFixed(2)}</span>
+              </div>
+
+              {promoDiscount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem", color: "var(--success)", fontWeight: "500" }}>
+                  <span>Promo Discount ({promoCode})</span>
+                  <span>-₹{promoDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem" }}>
+                <span style={{ color: "#555" }}>Shipping Fee</span>
+                <span style={{ fontWeight: "600" }}>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</span>
+              </div>
+            </div>
+
+            <div style={{ 
+              display: "flex", 
+              justifyContent: "space-between", 
+              alignItems: "center",
+              borderTop: "2px solid var(--primary)", 
+              paddingTop: "1.5rem", 
+              marginTop: "0.5rem"
+            }}>
+              <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.4rem", fontWeight: "600", color: "#111" }}>Grand Total</span>
+              <span style={{ fontFamily: "var(--font-serif)", fontSize: "1.6rem", fontWeight: "700", color: "var(--primary)" }}>₹{orderTotal.toFixed(2)}</span>
             </div>
             
-            <div className="summary-row" style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-              <span>Central GST (CGST)</span>
-              <span>₹{totalCGST.toFixed(2)}</span>
-            </div>
-
-            <div className="summary-row" style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: "1rem" }}>
-              <span>State GST (SGST)</span>
-              <span>₹{totalSGST.toFixed(2)}</span>
-            </div>
-
-            {promoDiscount > 0 && (
-              <div className="summary-row" style={{ color: "var(--success)" }}>
-                <span>Promo Discount ({promoCode})</span>
-                <span>-₹{promoDiscount.toFixed(2)}</span>
-              </div>
-            )}
-
-            <div className="summary-row">
-              <span>Shipping Fee</span>
-              <span>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</span>
-            </div>
-
-            <div className="summary-row total">
-              <span>Grand Total</span>
-              <span>₹{orderTotal.toFixed(2)}</span>
+            <div style={{ textAlign: "center", marginTop: "2rem", fontSize: "0.75rem", color: "#aaa" }}>
+              <i className="fa-solid fa-shield-halved" style={{ marginRight: "4px" }}></i> Secure 256-bit SSL Encryption
             </div>
           </aside>
         </div>
@@ -407,7 +447,16 @@ export default function CheckoutPage() {
 
       {/* Payment Selection Phase */}
       {checkoutPhase === "payment_selection" && (
-        <div style={{ padding: "4rem 2rem", background: "#ffffff", border: "1px solid #e0e0e0", maxWidth: "550px", margin: "2rem auto", textAlign: "center", borderRadius: "16px", boxShadow: "0 20px 40px rgba(0,0,0,0.08)" }}>
+        <div style={{ padding: "4rem 2rem", background: "#ffffff", border: "1px solid #e0e0e0", maxWidth: "550px", margin: "2rem auto", textAlign: "center", borderRadius: "16px", boxShadow: "0 20px 40px rgba(0,0,0,0.08)", minWidth: 0 }}>
+          <div style={{ textAlign: "left", marginBottom: "1rem" }}>
+            <button 
+              type="button"
+              onClick={() => setCheckoutPhase('billing')}
+              style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.9rem" }}
+            >
+              <i className="fa-solid fa-arrow-left"></i> Back to Billing
+            </button>
+          </div>
           <div style={{ marginBottom: "2.5rem" }}>
             <div style={{ width: "80px", height: "80px", background: "rgba(184, 134, 11, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem auto" }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -425,6 +474,10 @@ export default function CheckoutPage() {
           
           <button onClick={initializeRazorpay} className="btn" style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.3rem", fontSize: "1.1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", borderRadius: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", boxShadow: "0 8px 20px rgba(184, 134, 11, 0.3)", border: "none", cursor: "pointer", transition: "transform 0.2s ease" }}>
             <i className="fa-solid fa-lock" style={{ fontSize: "1.2rem" }}></i> PROCEED TO PAY SECURELY
+          </button>
+
+          <button onClick={simulatePayment} className="btn btn-outline" style={{ width: "100%", padding: "1rem", marginTop: "1rem", fontSize: "0.9rem", color: "#888", border: "1px dashed #ccc", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", borderRadius: "8px", cursor: "pointer" }}>
+            <i className="fa-solid fa-flask"></i> Skip Payment (Test Mode)
           </button>
           
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginTop: "2rem", color: "#666666", fontSize: "1.2rem" }}>
@@ -452,7 +505,7 @@ export default function CheckoutPage() {
 
       {/* Tax Invoice Printable Receipt */}
       {checkoutPhase === "receipt" && createdOrder && (
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div className="invoice-container">
             {/* Header info */}
             <div className="invoice-header">
@@ -494,30 +547,32 @@ export default function CheckoutPage() {
             </div>
 
             {/* Table items */}
-            <table className="invoice-table">
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th>HSN</th>
-                  <th style={{ textAlign: "center" }}>Qty</th>
-                  <th style={{ textAlign: "right" }}>Rate</th>
-                  <th style={{ textAlign: "right" }}>GST%</th>
-                  <th style={{ textAlign: "right" }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {taxItems.map(item => (
-                  <tr key={item.id}>
-                    <td>{item.name}</td>
-                    <td style={{ color: "var(--text-muted)" }}>{item.hsn}</td>
-                    <td style={{ textAlign: "center" }}>{item.quantity}</td>
-                    <td style={{ textAlign: "right" }}>₹{(item.price / (1 + item.rate/100)).toFixed(2)}</td>
-                    <td style={{ textAlign: "right" }}>{item.rate}%</td>
-                    <td style={{ textAlign: "right" }}>₹{(item.price * item.quantity).toFixed(2)}</td>
+            <div style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch", marginBottom: "2.5rem" }}>
+              <table className="invoice-table" style={{ minWidth: "580px", marginBottom: 0 }}>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>HSN</th>
+                    <th style={{ textAlign: "center" }}>Qty</th>
+                    <th style={{ textAlign: "right" }}>Rate</th>
+                    <th style={{ textAlign: "right" }}>GST%</th>
+                    <th style={{ textAlign: "right" }}>Amount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {taxItems.map(item => (
+                    <tr key={item.id}>
+                      <td>{item.name}</td>
+                      <td style={{ color: "var(--text-muted)" }}>{item.hsn}</td>
+                      <td style={{ textAlign: "center" }}>{item.quantity}</td>
+                      <td style={{ textAlign: "right" }}>₹{(item.price / (1 + item.rate/100)).toFixed(2)}</td>
+                      <td style={{ textAlign: "right" }}>{item.rate}%</td>
+                      <td style={{ textAlign: "right" }}>₹{(item.price * item.quantity).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Grand calculations breakdown */}
             <div className="invoice-total-details">
@@ -554,7 +609,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "3rem" }}>
+          <div className="no-print" style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "3rem" }}>
             <button 
               className="btn btn-outline" 
               onClick={() => window.print()}
