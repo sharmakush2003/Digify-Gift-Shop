@@ -68,6 +68,22 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   };
 
+  const resetPassword = async (email) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth?reset=true`,
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  const updatePassword = async (newPassword) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
+    return data;
+  };
+
   const checkEmailExists = async (email) => {
     // In Supabase, checking if email exists without admin rights is restricted by default for security.
     // So we just return true to proceed to login and let login handle the error.
@@ -89,6 +105,8 @@ export function AuthProvider({ children }) {
     login,
     signup,
     logout,
+    resetPassword,
+    updatePassword,
     checkEmailExists,
     showLoginModal,
     setShowLoginModal,

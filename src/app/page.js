@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useApp } from "./context/AppContext";
 
@@ -11,6 +11,18 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [hoveredHotspot, setHoveredHotspot] = useState(null);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (selectedProduct) {
+      document.body.classList.add("modal-open");
+    } else {
+      document.body.classList.remove("modal-open");
+    }
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [selectedProduct]);
 
   // Filter 4 featured products to display on home page
   const featuredProducts = products

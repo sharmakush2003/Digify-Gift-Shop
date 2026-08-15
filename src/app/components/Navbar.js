@@ -12,10 +12,6 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
 
-  if (pathname && (pathname.startsWith('/admin'))) {
-    return null;
-  }
-
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 40) {
@@ -27,6 +23,10 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  if (pathname && pathname.startsWith('/admin')) {
+    return null;
+  }
 
   return (
     <>

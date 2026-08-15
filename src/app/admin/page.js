@@ -633,61 +633,21 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="erp-layout">
-      <aside className="erp-sidebar">
-        <div className="sidebar-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <i className="fa-solid fa-layer-group" style={{ fontSize: '1.5rem', color: 'var(--primary)' }}></i>
-            <h2>Orient Admin</h2>
+    <div className="erp-page" style={{ marginTop: "60px", minHeight: "100vh", backgroundColor: "var(--bg-main)", paddingBottom: "5rem" }}>
+      {/* Header Stats Bar */}
+      <div className="erp-dashboard-header" style={{ padding: "4rem 6% 2rem 6%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+          <div>
+            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.5rem" }}>Orient Crockery Product Management System</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Operations Registry &bull; Local Storage Mode</p>
           </div>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600' }}>by Digify Soft Solution</span>
+          <button className="btn btn-outline btn-sm" onClick={handleLogout}>
+            <i className="fa-solid fa-right-from-bracket"></i> Logout Portal
+          </button>
         </div>
-        <nav className="sidebar-nav">
-          <div className="sidebar-nav-item">
-            <i className="fa-solid fa-house"></i>
-            <span>Home Dashboard</span>
-          </div>
-          <div 
-            className={`sidebar-nav-item ${activeTab === 'orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('orders')}
-          >
-            <i className="fa-solid fa-cart-shopping"></i>
-            <span>Orders Queue</span>
-          </div>
-          <div 
-            className={`sidebar-nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
-            onClick={() => setActiveTab('inventory')}
-          >
-            <i className="fa-solid fa-boxes-stacked"></i>
-            <span>Inventory</span>
-          </div>
-          <div className="sidebar-nav-item">
-            <i className="fa-solid fa-users"></i>
-            <span>Customers</span>
-          </div>
-          <div className="sidebar-nav-item">
-            <i className="fa-solid fa-chart-pie"></i>
-            <span>Reports</span>
-          </div>
-          <div className="sidebar-nav-item" onClick={handleLogout} style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '20px' }}>
-            <i className="fa-solid fa-right-from-bracket"></i>
-            <span>Logout</span>
-          </div>
-        </nav>
-      </aside>
-
-      <main className="erp-main-content">
-        {/* Header Stats Bar */}
-        <div className="erp-dashboard-header">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
-            <div>
-              <h2>Orient Crockery Product Management System</h2>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Operations Registry &bull; Local Storage Mode</p>
-            </div>
-          </div>
 
         {/* Metric widgets grid */}
-        <div className="erp-metrics-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="erp-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
           <div className="metric-card">
             <span className="card-title">Consolidated Revenue</span>
             <h3>₹{totalRevenue.toLocaleString("en-IN")}</h3>
@@ -706,7 +666,22 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="erp-main-section" style={{ padding: "20px 0" }}>
+      <div className="erp-main-section" style={{ padding: "0 6%" }}>
+        {/* Tabs list */}
+        <div className="erp-tabs" style={{ display: "flex", gap: "1rem", marginBottom: "25px" }}>
+          <button 
+            className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
+            onClick={() => setActiveTab("orders")}
+          >
+            <i className="fa-solid fa-dolly"></i> Orders Queue
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === "inventory" ? "active" : ""}`}
+            onClick={() => setActiveTab("inventory")}
+          >
+            <i className="fa-solid fa-boxes-stacked"></i> Inventory Registry
+          </button>
+        </div>
 
         {/* Tab 1: Orders Queue */}
         {activeTab === "orders" && (
@@ -906,7 +881,6 @@ export default function AdminPage() {
           </div>
         )}
       </div>
-      </main>
       {/* Modals are placed below main */}
 
       {/* Edit Product Modal Form */}

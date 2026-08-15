@@ -21,6 +21,18 @@ function CatalogContent() {
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (selectedProduct) {
+      document.body.classList.add("modal-open");
+    } else {
+      document.body.classList.remove("modal-open");
+    }
+    return () => {
+      document.body.classList.remove("modal-open");
+    };
+  }, [selectedProduct]);
+
   // Read URL parameters
   const deptParam = searchParams.get("department");
   const wishlistOnly = searchParams.get("wishlist") === "true";
