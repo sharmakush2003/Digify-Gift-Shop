@@ -132,7 +132,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (loginEmail === "admin@orient.com" && loginPassword === "admin123") {
+    if (loginEmail.trim().toLowerCase() === "admin@orient.com" && loginPassword.trim() === "admin123") {
       setIsLoggedIn(true);
       setAuthError("");
       localStorage.setItem("orient_is_admin", "true");
