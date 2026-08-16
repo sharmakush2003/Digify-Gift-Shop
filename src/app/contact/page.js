@@ -1,25 +1,6 @@
-export default function ContactPage() {
-  const inputStyle = {
-    width: "100%",
-    padding: "1rem",
-    border: "1px solid var(--border)",
-    background: "var(--bg-main)",
-    color: "var(--text-main)",
-    fontSize: "0.95rem",
-    fontFamily: "var(--font-sans)",
-    outline: "none",
-    transition: "var(--transition)"
-  };
+import Image from 'next/image';
 
-  const labelStyle = {
-    display: "block",
-    fontSize: "0.75rem",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-    color: "var(--text-muted)",
-    marginBottom: "0.5rem"
-  };
+export default function ContactPage() {
 
   return (
     <main className="container">
@@ -71,36 +52,55 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* Contact Form Side */}
-        <div>
-          <form style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <div className="form-row">
-              <div>
-                <label htmlFor="name" style={labelStyle}>Full Name</label>
-                <input type="text" id="name" style={inputStyle} placeholder="John Doe" required />
-              </div>
-              <div>
-                <label htmlFor="email" style={labelStyle}>Email Address</label>
-                <input type="email" id="email" style={inputStyle} placeholder="john@example.com" required />
-              </div>
+        {/* Support Card Side */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div style={{ 
+            width: "100%", 
+            height: "100%", 
+            minHeight: "400px", 
+            borderRadius: "16px", 
+            background: "linear-gradient(135deg, var(--bg-alt) 0%, var(--bg-main) 100%)",
+            border: "1px solid var(--border)",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.04)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "3rem",
+            textAlign: "center"
+          }}>
+            <div style={{ 
+              width: "80px", 
+              height: "80px", 
+              borderRadius: "50%", 
+              background: "var(--bg-main)", 
+              display: "flex", 
+              justifyContent: "center", 
+              alignItems: "center",
+              boxShadow: "0 10px 20px rgba(0,0,0,0.05)",
+              marginBottom: "2rem"
+            }}>
+              <i className="fa-solid fa-headset" style={{ fontSize: "2rem", color: "var(--primary)" }}></i>
             </div>
             
-            <div>
-              <label htmlFor="subject" style={labelStyle}>Subject</label>
-              <input type="text" id="subject" style={inputStyle} placeholder="How can we help you?" required />
+            <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", color: "var(--dark)", marginBottom: "1rem" }}>
+              We're Here to Help
+            </h3>
+            <p style={{ color: "var(--text-muted)", fontSize: "1.05rem", lineHeight: "1.8", marginBottom: "2rem", maxWidth: "80%" }}>
+              Whether you need assistance with an existing order, have a question about our premium collections, or want to discuss a bulk requirement, our dedicated support team is ready to assist you.
+            </p>
+            
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <a href="mailto:support@orientcrockeries.com" className="btn btn-primary" style={{ padding: "0.8rem 1.5rem", borderRadius: "30px", fontSize: "0.9rem", textDecoration: "none" }}>
+                <i className="fa-solid fa-envelope" style={{ marginRight: "8px" }}></i> Email Us
+              </a>
+              <a href="tel:+915551234567" className="btn btn-outline" style={{ padding: "0.8rem 1.5rem", borderRadius: "30px", fontSize: "0.9rem", textDecoration: "none" }}>
+                <i className="fa-solid fa-phone" style={{ marginRight: "8px" }}></i> Call Now
+              </a>
             </div>
-
-            <div>
-              <label htmlFor="message" style={labelStyle}>Message</label>
-              <textarea id="message" rows="5" style={{ ...inputStyle, resize: "vertical" }} placeholder="Write your message here..." required></textarea>
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ marginTop: "1rem", width: "100%" }}>
-              Send Message
-            </button>
-          </form>
+          </div>
         </div>
-        
+
       </div>
     </main>
   );

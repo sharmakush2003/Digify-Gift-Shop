@@ -313,12 +313,15 @@ export default function AdminPage() {
     const updated = {
       ...editingProduct,
       price: parseFloat(editingProduct.price),
-      stock: parseInt(editingProduct.stock),
+      stock: editingProduct.stockStatus === "Out of Stock" ? 0 : parseInt(editingProduct.stock),
       soldCount: parseInt(editingProduct.soldCount) || 0,
       gst: parseFloat(editingProduct.gst) || 18,
       rating,
       reviewCount: reviews.length
     };
+    
+    // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
+    delete updated.stockStatus;
 
     const updateProductInSupabase = async () => {
       try {
@@ -854,10 +857,10 @@ export default function AdminPage() {
                       <td>{p.category}</td>
                       <td>₹{p.price.toFixed(2)}</td>
                       <td style={{ 
-                        color: p.stock < 5 ? "var(--error)" : "inherit",
-                        fontWeight: p.stock < 5 ? "bold" : "normal"
+                        color: (p.stock < 5 || p.stockStatus === 'Out of Stock') ? "var(--error)" : "inherit",
+                        fontWeight: (p.stock < 5 || p.stockStatus === 'Out of Stock') ? "bold" : "normal"
                       }}>
-                        {p.stock === 0 ? "Out of Stock" : `${p.stock} units`}
+                        {p.stockStatus === 'Out of Stock' || p.stock === 0 ? "Out of Stock" : `${p.stock} units left`}
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: "4px" }}>
@@ -922,6 +925,17 @@ export default function AdminPage() {
                     value={editingProduct.stock}
                     onChange={(e) => setEditingProduct({ ...editingProduct, stock: e.target.value })}
                   />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Stock Status</span>
+                  <select 
+                    className="sort-select"
+                    value={editingProduct.stockStatus || "Available"}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, stockStatus: e.target.value })}
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <span className="form-label">Barcode</span>

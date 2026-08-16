@@ -303,8 +303,8 @@ export default function Home() {
                 style={{ cursor: "pointer" }}
               >
                 <div className="product-img-wrapper">
-                  {product.stock <= 0 && <span className="product-badge out-stock">Out of Stock</span>}
-                  {product.rating >= 4.9 && product.stock > 0 && <span className="product-badge">Best Seller</span>}
+                  {(product.stock <= 0 || product.stockStatus === 'Out of Stock') && <span className="product-badge out-stock">Out of Stock</span>}
+                  {product.rating >= 4.9 && product.stock > 30 && product.stockStatus !== 'Out of Stock' && <span className="product-badge">Best Seller</span>}
                   <Image 
                     src={product.image} 
                     alt={product.name} 
@@ -326,14 +326,19 @@ export default function Home() {
                 <div className="product-info">
                   <span className="product-category">{product.category}</span>
                   <h3 className="product-title">{product.name}</h3>
+                  {product.stockStatus !== 'Out of Stock' && product.stock > 0 && product.stock <= 30 && (
+                    <div style={{ color: '#d32f2f', fontSize: '0.8rem', fontWeight: 'bold', marginTop: '4px', marginBottom: '8px' }}>
+                      🔥 Only {product.stock} left
+                    </div>
+                  )}
                   <div className="product-price-row">
                     <span className="product-price">₹{product.price.toFixed(2)}</span>
                     <button 
                       className="product-action-btn"
                       onClick={(e) => handleAddToCart(product, e)}
-                      disabled={product.stock <= 0}
+                      disabled={product.stock <= 0 || product.stockStatus === 'Out of Stock'}
                     >
-                      {product.stock <= 0 ? "Unavailable" : "Add to Cart"}
+                      {(product.stock <= 0 || product.stockStatus === 'Out of Stock') ? "Unavailable" : "Add to Cart"}
                     </button>
                   </div>
                 </div>
@@ -429,8 +434,8 @@ export default function Home() {
                 </div>
                 <div className="spec-item">
                   <span className="spec-label">Availability</span>
-                  <span className="spec-value" style={{ color: selectedProduct.stock > 0 ? "var(--success)" : "var(--error)" }}>
-                    {selectedProduct.stock > 0 ? `${selectedProduct.stock} In Stock` : "Sold Out"}
+                  <span className="spec-value" style={{ color: (selectedProduct.stock > 0 && selectedProduct.stockStatus !== 'Out of Stock') ? "var(--success)" : "var(--error)" }}>
+                    {(selectedProduct.stockStatus === 'Out of Stock' || selectedProduct.stock <= 0) ? "Sold Out" : `${selectedProduct.stock} In Stock`}
                   </span>
                 </div>
               </div>
@@ -442,9 +447,9 @@ export default function Home() {
                     handleAddToCart(selectedProduct, e);
                     setSelectedProduct(null);
                   }}
-                  disabled={selectedProduct.stock <= 0}
+                  disabled={selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock'}
                 >
-                  {selectedProduct.stock <= 0 ? "Temporarily Unavailable" : "Add to Shopping Cart"}
+                  {(selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock') ? "Temporarily Unavailable" : "Add to Shopping Cart"}
                 </button>
               </div>
             </div>
