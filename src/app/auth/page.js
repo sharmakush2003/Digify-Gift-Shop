@@ -1,17 +1,20 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import Link from 'next/link';
 import './auth.css';
 
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, login, signup, resetPassword, updatePassword } = useAuth();
   
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [isResetMode, setIsResetMode] = useState(false);
+  
+  // Synchronously determine if we are in reset mode from the URL
+  const isResetMode = searchParams.get('reset') === 'true';
   const [resetSent, setResetSent] = useState(false);
   
   const [name, setName] = useState('');
@@ -22,16 +25,6 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Check URL parameters on mount to check if we are in recovery mode
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('reset') === 'true') {
-        setIsResetMode(true);
-      }
-    }
-  }, []);
 
   // Redirect if logged in and not in reset mode
   useEffect(() => {
