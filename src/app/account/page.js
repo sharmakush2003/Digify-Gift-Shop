@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { generateInvoicePDF } from '../utils/invoiceGenerator';
 import Link from 'next/link';
 import '../auth/auth.css';
 
@@ -126,11 +127,25 @@ export default function AccountPage() {
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status</p>
                   <span style={{ background: 'rgba(212, 175, 55, 0.1)', color: 'var(--primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>{order.status || 'Pending'}</span>
+                  {order.status === 'Shipped' && order.delivery_otp && (
+                    <div style={{ marginTop: '10px', padding: '6px', border: '1px dashed var(--primary)', borderRadius: '4px', background: '#fff', color: 'var(--dark)' }}>
+                      <span style={{ fontSize: '0.75rem', display: 'block', color: 'var(--text-muted)' }}>Delivery OTP</span>
+                      <strong style={{ fontSize: '1.2rem', letterSpacing: '2px' }}>{order.delivery_otp}</strong>
+                    </div>
+                  )}
                 </div>
                 
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Total</p>
                   <h4 style={{ margin: 0, fontSize: '1.2rem' }}>₹{Number(order.total).toFixed(2)}</h4>
+                  {["Packed", "Shipped", "Delivered"].includes(order.status) && (
+                    <button 
+                      onClick={() => generateInvoicePDF(order)}
+                      style={{ marginTop: '10px', background: 'none', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    >
+                      <i className="fa-solid fa-file-pdf"></i> Download Invoice
+                    </button>
+                  )}
                 </div>
                 
                 <div style={{ width: '100%', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border)' }}>

@@ -68,10 +68,25 @@ export function AppProvider({ children }) {
           }
           
           // Fetch orders for this user
-          const { data: dbOrders } = await supabase.from('orders').select('*').eq('customerEmail', user.email);
+          const { data: dbOrders } = await supabase.from('orders').select('*').eq('guest_email', user.email);
           if (dbOrders && dbOrders.length > 0) {
-            // Sort by most recent
-            const sorted = dbOrders.sort((a,b) => new Date(b.date) - new Date(a.date));
+            const localOrders = getOrders();
+            // Map the DB schema back to what the frontend expects
+            const mappedOrders = dbOrders.map(dbOrder => {
+              const matchedLocal = localOrders.find(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id);
+              return {
+                id: dbOrder.order_number || dbOrder.id,
+                date: dbOrder.created_at,
+                customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
+                customerEmail: dbOrder.guest_email,
+                shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
+                delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
+                total: dbOrder.final_total || 0,
+                items: matchedLocal ? matchedLocal.items : [], 
+                status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : 'Delivered')),
+              };
+            });
+            const sorted = mappedOrders.sort((a,b) => new Date(b.date) - new Date(a.date));
             setOrders(sorted);
           } else {
             // Fallback to local storage matching user's email

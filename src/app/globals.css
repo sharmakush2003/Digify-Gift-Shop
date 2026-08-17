@@ -1391,6 +1391,10 @@ nav {
   border-left: 4px solid var(--primary);
 }
 
+.toast-error {
+  border-left: 4px solid var(--error);
+}
+
 /* Empty Catalog/Cart Styling */
 .empty-state {
   text-align: center;

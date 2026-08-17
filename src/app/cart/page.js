@@ -20,20 +20,45 @@ export default function CartPage() {
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoApplied, setPromoApplied] = useState("");
 
-  // Promo code validation
-  const handleApplyPromo = (e) => {
+  // Toast Notification State
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success"); // 'success' or 'error'
+
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 3500);
+  };
+
+  // Promo code validation via backend API
+  const handleApplyPromo = async (e) => {
     e.preventDefault();
     const code = promoInput.trim().toUpperCase();
-    if (code === "WELCOME10") {
-      setPromoDiscount(cartSubtotal * 0.1);
-      setPromoApplied("WELCOME10");
-      setPromoInput("");
-    } else if (code === "FESTIVE20") {
-      setPromoDiscount(cartSubtotal * 0.2);
-      setPromoApplied("FESTIVE20");
-      setPromoInput("");
-    } else {
-      alert("Invalid promotional code.");
+    
+    if (!code) return;
+
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, cartValue: cartSubtotal })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPromoDiscount(data.discountAmount);
+        setPromoApplied(data.coupon.code);
+        setPromoInput("");
+        showToast(`🎉 Yay! ${data.coupon.code} applied successfully! 🎈`, "success");
+      } else {
+        showToast(`❌ ${data.message || "Invalid promotional code."}`, "error");
+      }
+    } catch (error) {
+      console.error("Error validating coupon:", error);
+      showToast("❌ Error validating coupon. Please try again.", "error");
     }
   };
 
@@ -122,9 +147,9 @@ export default function CartPage() {
                 />
                 <button type="submit" className="btn btn-outline btn-sm">Apply</button>
               </form>
-              <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                Try <b>WELCOME10</b> (10% off) or <b>FESTIVE20</b> (20% off)
-              </p>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "10px" }}>
+                  Enter a valid coupon code to get a discount.
+                </p>
             </div>
 
             {/* Calculations Breakdown */}
@@ -161,6 +186,16 @@ export default function CartPage() {
           </aside>
         </div>
       )}
+      
+      {/* Floating Toast Notification */}
+      <div className={`toast ${toastType === 'success' ? 'toast-success' : 'toast-error'} ${toastMessage ? "show" : ""}`}>
+        {toastType === 'success' ? (
+          <i className="fa-solid fa-gift" style={{ color: "var(--primary)", fontSize: "1.2rem" }}></i>
+        ) : (
+          <i className="fa-solid fa-circle-exclamation" style={{ color: "var(--error)", fontSize: "1.2rem" }}></i>
+        )}
+        <span>{toastMessage}</span>
+      </div>
     </div>
   );
 }

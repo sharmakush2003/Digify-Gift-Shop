@@ -11,6 +11,7 @@ export default function Navbar() {
   const [mobileActive, setMobileActive] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const { logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,15 +78,23 @@ export default function Navbar() {
           <li><Link href="/care" onClick={() => setMobileActive(false)}>Care Guide</Link></li>
           <li><Link href="/delivery" onClick={() => setMobileActive(false)}>Delivery & Shipping</Link></li>
           <li><Link href="/contact" onClick={() => setMobileActive(false)}>Contact</Link></li>
-          <li>
+          <li style={{ display: 'flex', gap: '10px' }}>
             {user ? (
-              <Link 
-                href="/account"
-                className="nav-link-btn" 
-                onClick={() => setMobileActive(false)}
-              >
-                My Account
-              </Link>
+              <>
+                <Link 
+                  href="/account"
+                  className="nav-link-btn" 
+                  onClick={() => setMobileActive(false)}
+                >
+                  My Account
+                </Link>
+                <button 
+                  onClick={() => { logout(); setMobileActive(false); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '600', fontSize: '0.8rem', letterSpacing: '2px', cursor: 'pointer', textTransform: 'uppercase' }}
+                >
+                  LOGOUT
+                </button>
+              </>
             ) : (
               <Link href="/auth" className="nav-link-btn" onClick={() => setMobileActive(false)}>
                 Sign In / Sign Up

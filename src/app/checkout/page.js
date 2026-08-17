@@ -22,7 +22,14 @@ export default function CheckoutPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [street, setStreet] = useState("");
-  const [area, setArea] = useState("");
+  const [area, setArea] = useState("Vaishali Nagar");
+  const [shippingPincode, setShippingPincode] = useState("");
+  
+  const [sameAsShipping, setSameAsShipping] = useState(true);
+  const [billingStreet, setBillingStreet] = useState("");
+  const [billingArea, setBillingArea] = useState("Vaishali Nagar");
+  const [billingPincode, setBillingPincode] = useState("");
+
   const [isDetecting, setIsDetecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -69,10 +76,17 @@ export default function CheckoutPage() {
 
   const totalGST = totalCGST + totalSGST;
 
-  const handleSubmitBilling = (e) => {
-    e.preventDefault();
-    if (!name || !email || !phone || !street || !area) {
-      alert("Please fill in all shipping fields.");
+  const handleProceedToPayment = () => {
+    if (!name || !email || !phone || !street || !shippingPincode) {
+      alert("Please fill all required shipping details.");
+      return;
+    }
+    if (shippingPincode.length !== 6) {
+      alert("Please enter a valid 6-digit PIN code.");
+      return;
+    }
+    if (!sameAsShipping && (!billingStreet || !billingPincode)) {
+      alert("Please fill all required billing details.");
       return;
     }
     setCheckoutPhase("payment_selection");
@@ -121,18 +135,54 @@ export default function CheckoutPage() {
   };
 
 
-  const simulatePayment = () => {
+  const simulatePayment = async () => {
     setCheckoutPhase("paying");
     setPaymentStatus("Initializing Secure Payment Interface...");
-    setTimeout(() => {
+    
+    // Call our secure backend to create order in DB
+    try {
+      const res = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          items: cart,
+          couponCode: appliedCoupon?.code || null,
+          shippingFee: shippingFee,
+          customerDetails: {
+            name, email, phone,
+            shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
+            billingAddress: sameAsShipping ? 
+              { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
+              { street: billingStreet, area: billingArea, city: 'Jaipur', state: 'Rajasthan', pincode: billingPincode }
+          }
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+
       setPaymentStatus("Authenticating Payment Details...");
       setTimeout(() => {
         setPaymentStatus("Recording transaction and generating invoice...");
-        setTimeout(() => {
-          completeOrder();
-        }, 1200);
-      }, 1200);
-    }, 1000);
+        // Mock verification
+        fetch("/api/payment/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            razorpay_order_id: data.razorpayOrderId, 
+            razorpay_payment_id: "pay_mock_" + Math.random().toString(36).substr(2, 9), 
+            razorpay_signature: "mock_signature", 
+            order_db_id: data.order.id 
+          })
+        }).then(() => {
+          completeOrder(data.order);
+        }).catch(() => {
+          completeOrder(data.order);
+        });
+      }, 1500);
+    } catch (err) {
+      alert("Checkout failed: " + err.message);
+      setCheckoutPhase("payment_selection");
+    }
   };
 
   const initializeRazorpay = async () => {
@@ -140,44 +190,68 @@ export default function CheckoutPage() {
     setPaymentStatus("Initializing Secure Payment Interface...");
     
     try {
-      const res = await fetch("/api/razorpay", {
+      // Create order securely via backend
+      const res = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: orderTotal }),
+        body: JSON.stringify({ 
+          items: cart,
+          couponCode: appliedCoupon?.code || null,
+          shippingFee: shippingFee,
+          customerDetails: {
+            name, email, phone,
+            shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
+            billingAddress: sameAsShipping ? 
+              { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
+              { street: billingStreet, area: billingArea, city: 'Jaipur', state: 'Rajasthan', pincode: billingPincode }
+          }
+        }),
       });
       
       const order = await res.json();
       
-      if (order.error) {
-        console.warn("Razorpay API failed, falling back to mock payment simulation.");
-        simulatePayment(); // Auto fallback to mock payment
+      if (!order.success) {
+        console.warn("Backend order creation failed.", order.message);
+        simulatePayment(); // Auto fallback to mock payment for demo
         return;
       }
       
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Enter the Key ID generated from the Dashboard
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_YourKeyHere', // Replace with real key
         amount: order.amount,
-        currency: order.currency,
+        currency: "INR",
         name: "Orient Crockeries",
         description: "Secure Payment",
-        order_id: order.id,
-        handler: function (response) {
-          setPaymentStatus("Recording transaction and generating invoice...");
-          completeOrder(response.razorpay_payment_id);
-        },
-        prefill: {
-          name: name,
-          email: email,
-          contact: phone,
-        },
-        theme: {
-          color: "#18181b",
-        },
-        modal: {
-          ondismiss: function() {
+        order_id: order.razorpayOrderId,
+        handler: async function (response) {
+          setPaymentStatus("Verifying transaction securely...");
+          try {
+            // Verify payment securely on backend
+            const verifyRes = await fetch("/api/payment/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                razorpay_order_id: response.razorpay_order_id, 
+                razorpay_payment_id: response.razorpay_payment_id, 
+                razorpay_signature: response.razorpay_signature, 
+                order_db_id: order.order.id 
+              })
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              completeOrder(verifyData.order);
+            } else {
+              alert("Payment verification failed! " + verifyData.message);
+              setCheckoutPhase("payment_selection");
+            }
+          } catch (e) {
+            alert("Error during verification.");
             setCheckoutPhase("payment_selection");
           }
-        }
+        },
+        prefill: { name, email, contact: phone },
+        theme: { color: "#18181b" },
+        modal: { ondismiss: function() { setCheckoutPhase("payment_selection"); } }
       };
 
       const rzp1 = new window.Razorpay(options);
@@ -188,20 +262,39 @@ export default function CheckoutPage() {
       rzp1.open();
     } catch (err) {
       console.warn("Razorpay init failed, falling back to mock payment simulation.", err);
-      simulatePayment(); // Auto fallback to mock payment
+      simulatePayment();
     }
   };
 
-  const completeOrder = async (razorpayPaymentId = null) => {
-    // Save order in Firestore
-    const orderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
-    const orderData = {
-      id: orderId,
+  const completeOrder = async (backendOrderData = null) => {
+    // If backend order exists, use it, else fallback to mock structure
+    const fallbackOrderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
+    const orderData = backendOrderData ? {
+      id: backendOrderData.id,
+      order_number: backendOrderData.order_number,
+      date: backendOrderData.created_at || new Date().toISOString(),
+      customerName: name,
+      customerPhone: phone,
+      customerEmail: email,
+      shippingAddress: backendOrderData.shipping_address?.raw_text || `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
+      items: cart,
+      subtotal: backendOrderData.total_mrp || subtotal,
+      shipping: backendOrderData.shipping_charge || shippingFee,
+      discount: backendOrderData.discount_amount || promoDiscount,
+      total: backendOrderData.final_total || orderTotal,
+      gstAmount: backendOrderData.tax_amount || totalGST,
+      status: "Pending",
+      courierStatus: "In Warehouse",
+      paymentStatus: "Paid",
+      paymentId: backendOrderData.payment_reference_id
+    } : {
+      id: fallbackOrderId,
+      order_number: fallbackOrderId,
       date: new Date().toISOString(),
       customerName: name,
       customerPhone: phone,
       customerEmail: email,
-      shippingAddress: `${street}, ${area}, Jaipur, Rajasthan`,
+      shippingAddress: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
       items: cart,
       subtotal: subtotal,
       shipping: shippingFee,
@@ -211,17 +304,14 @@ export default function CheckoutPage() {
       status: "Pending",
       courierStatus: "In Warehouse",
       paymentStatus: "Paid",
-      paymentId: razorpayPaymentId || ("pay_" + Math.random().toString(36).substr(2, 9))
+      paymentId: "pay_" + Math.random().toString(36).substr(2, 9)
     };
 
-    try {
-      const { supabase } = await import("../../supabase");
-      await supabase.from("orders").insert(orderData);
-    } catch (err) {
-      console.error("Error saving order to Supabase:", err);
-      // Fallback to local
-      saveOrder(orderData);
-    }
+    // Always save locally so fallback & UI work immediately
+    saveOrder(orderData);
+    setCreatedOrder(orderData);
+    setCheckoutPhase("receipt");
+    clearCart();
 
     // Trigger Google Sheets Webhook
     try {
@@ -240,10 +330,6 @@ export default function CheckoutPage() {
     } catch (err) {
       console.error("Error syncing to Google Sheets:", err);
     }
-
-    setCreatedOrder(orderData);
-    clearCart(); // Wipe cart
-    setCheckoutPhase("receipt");
   };
 
   return (
@@ -254,7 +340,7 @@ export default function CheckoutPage() {
       {checkoutPhase === "billing" && (
         <div className="checkout-layout">
           {/* Shipping Form */}
-          <form onSubmit={handleSubmitBilling} className="checkout-card" style={{ minWidth: 0 }}>
+          <div className="checkout-card" style={{ minWidth: 0 }}>
             <div style={{ marginBottom: "1rem" }}>
               <button 
                 type="button"
@@ -364,12 +450,96 @@ export default function CheckoutPage() {
                   <option value="Other">Other Area</option>
                 </select>
               </div>
+              <div className="form-group">
+                <span className="form-label">PIN Code</span>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  required 
+                  maxLength={6}
+                  value={shippingPincode}
+                  onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
             </div>
-            
-            <button type="submit" className="btn btn-primary btn-full" style={{ marginTop: "2rem" }}>
-              Proceed to Payment &bull; ₹{orderTotal.toFixed(2)}
+
+            <div className="billing-address-section" style={{ marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.5rem" }}>
+              <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.4rem", marginBottom: "1rem" }}>Billing Address</h3>
+              
+              <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "10px" }}>
+                <input 
+                  type="checkbox" 
+                  id="sameAsShipping" 
+                  checked={sameAsShipping}
+                  onChange={(e) => setSameAsShipping(e.target.checked)}
+                  style={{ width: "18px", height: "18px" }}
+                />
+                <label htmlFor="sameAsShipping" style={{ cursor: "pointer", fontSize: "0.95rem" }}>Billing address is same as Shipping address</label>
+              </div>
+
+              {!sameAsShipping && (
+                <div className="form-grid">
+                  <div className="form-group full-width">
+                    <span className="form-label">Street Address</span>
+                    <textarea 
+                      rows="3" 
+                      className="form-input" 
+                      required={!sameAsShipping}
+                      style={{ resize: "none" }}
+                      value={billingStreet}
+                      onChange={(e) => setBillingStreet(e.target.value)}
+                    ></textarea>
+                  </div>
+                  <div className="form-group full-width">
+                    <span className="form-label">Area (Jaipur Only)</span>
+                    <select 
+                      className="form-input" 
+                      value={billingArea} 
+                      onChange={(e) => setBillingArea(e.target.value)}
+                    >
+                      <option value="Vaishali Nagar">Vaishali Nagar</option>
+                      <option value="Malviya Nagar">Malviya Nagar</option>
+                      <option value="Mansarovar">Mansarovar</option>
+                      <option value="C-Scheme">C-Scheme</option>
+                      <option value="Bapu Nagar">Bapu Nagar</option>
+                      <option value="Raja Park">Raja Park</option>
+                      <option value="Jagatpura">Jagatpura</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <span className="form-label">City</span>
+                    <input type="text" className="form-input" value="Jaipur" readOnly style={{ background: "var(--bg-inset)" }} />
+                  </div>
+                  <div className="form-group">
+                    <span className="form-label">State</span>
+                    <input type="text" className="form-input" value="Rajasthan" readOnly style={{ background: "var(--bg-inset)" }} />
+                  </div>
+                  <div className="form-group full-width">
+                    <span className="form-label">PIN Code</span>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      required={!sameAsShipping}
+                      maxLength={6}
+                      value={billingPincode}
+                      onChange={(e) => setBillingPincode(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button 
+              type="button"
+              className="btn" 
+              onClick={handleProceedToPayment}
+              style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.2rem", fontSize: "1.1rem", marginTop: "2rem" }}
+            >
+              Proceed to Payment
             </button>
-          </form>          {/* Pricing Summary Side column */}
+          </div>
+
+          {/* Pricing Summary Side column */}
           <aside className="cart-summary-box" style={{ 
             minWidth: 0, 
             background: "linear-gradient(to bottom, #fffaf0, #ffffff)", 
@@ -505,122 +675,38 @@ export default function CheckoutPage() {
 
       {/* Tax Invoice Printable Receipt */}
       {checkoutPhase === "receipt" && createdOrder && (
-        <div style={{ minWidth: 0 }}>
-          <div className="invoice-container">
-            {/* Header info */}
-            <div className="invoice-header">
-              <div>
-                <span className="logo" style={{ fontSize: "1.6rem" }}>ORIENT</span>
-                <span className="logo-tagline" style={{ display: "block", fontSize: "0.55rem" }}>Crockeries</span>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "8px" }}>
-                  G-42, Crockery Market, Delhi, IN<br />
-                  GSTIN: 07AAACO8412K1Z5
-                </p>
-              </div>
-              <div className="invoice-meta">
-                <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.5rem", color: "var(--primary)" }}>TAX INVOICE</h3>
-                <p>Invoice #: <b>{createdOrder.id}</b></p>
-                <p>Date: <b>{new Date(createdOrder.date).toLocaleDateString()}</b></p>
-                <p>Payment Mode: <b>Card / UPI (Paid)</b></p>
-              </div>
-            </div>
-
-            {/* Address rows */}
-            <div className="invoice-address-grid">
-              <div className="address-block">
-                <h4>Billed &amp; Shipped To</h4>
-                <p>
-                  <b>{createdOrder.customerName}</b><br />
-                  Phone: {createdOrder.customerPhone}<br />
-                  Email: {createdOrder.customerEmail}<br />
-                  Address: {createdOrder.shippingAddress}
-                </p>
-              </div>
-              <div className="address-block" style={{ textAlign: "right" }}>
-                <h4>Logistics Partner</h4>
-                <p>
-                  <b>BlueDart Air Cargo</b><br />
-                  Fragile Insurance Coverage: Yes<br />
-                  Handling Class: Fragile Ceramic/Ironware
-                </p>
-              </div>
-            </div>
-
-            {/* Table items */}
-            <div style={{ overflowX: "auto", width: "100%", WebkitOverflowScrolling: "touch", marginBottom: "2.5rem" }}>
-              <table className="invoice-table" style={{ minWidth: "580px", marginBottom: 0 }}>
-                <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th>HSN</th>
-                    <th style={{ textAlign: "center" }}>Qty</th>
-                    <th style={{ textAlign: "right" }}>Rate</th>
-                    <th style={{ textAlign: "right" }}>GST%</th>
-                    <th style={{ textAlign: "right" }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {taxItems.map(item => (
-                    <tr key={item.id}>
-                      <td>{item.name}</td>
-                      <td style={{ color: "var(--text-muted)" }}>{item.hsn}</td>
-                      <td style={{ textAlign: "center" }}>{item.quantity}</td>
-                      <td style={{ textAlign: "right" }}>₹{(item.price / (1 + item.rate/100)).toFixed(2)}</td>
-                      <td style={{ textAlign: "right" }}>{item.rate}%</td>
-                      <td style={{ textAlign: "right" }}>₹{(item.price * item.quantity).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Grand calculations breakdown */}
-            <div className="invoice-total-details">
-              <div className="invoice-total-row">
-                <span>Taxable Amount</span>
-                <span>₹{(createdOrder.subtotal - totalGST).toFixed(2)}</span>
-              </div>
-              <div className="invoice-total-row">
-                <span>CGST Amount</span>
-                <span>₹{totalCGST.toFixed(2)}</span>
-              </div>
-              <div className="invoice-total-row">
-                <span>SGST Amount</span>
-                <span>₹{totalSGST.toFixed(2)}</span>
-              </div>
-              {createdOrder.discount > 0 && (
-                <div className="invoice-total-row" style={{ color: "var(--success)" }}>
-                  <span>Discounts Applied</span>
-                  <span>-₹{createdOrder.discount.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="invoice-total-row">
-                <span>Shipping &amp; Handling</span>
-                <span>{createdOrder.shipping === 0 ? "FREE" : `₹${createdOrder.shipping.toFixed(2)}`}</span>
-              </div>
-              <div className="invoice-total-row grand-total">
-                <span>Grand Total (Incl. Tax)</span>
-                <span>₹{createdOrder.total.toFixed(2)}</span>
-              </div>
-            </div>
-            
-            <div style={{ marginTop: "2rem", fontSize: "0.75rem", borderTop: "1px dashed var(--border)", paddingTop: "1rem", color: "var(--text-muted)", textAlign: "center" }}>
-              Thank you for shopping at Orient Crockeries! The items are packed with dual air cushion bubble sheets to ensure safe arrival.
-            </div>
+        <div style={{ textAlign: "center", padding: "4rem 2rem", background: "var(--bg-surface)", border: "1px solid var(--border)", maxWidth: "600px", margin: "0 auto", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" }}>
+          <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "rgba(212, 175, 55, 0.1)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 2rem", fontSize: "3rem" }}>
+            <i className="fa-solid fa-check"></i>
+          </div>
+          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1rem", color: "var(--dark)" }}>Payment Successful!</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "1.1rem", marginBottom: "2rem", lineHeight: "1.6" }}>
+            Thank you for your purchase. Your order <b>{createdOrder.id}</b> is being processed for shipping.
+          </p>
+          
+          <div style={{ background: "#fff9e6", padding: "1.5rem", borderRadius: "8px", border: "1px dashed var(--primary)", marginBottom: "2rem", textAlign: "left" }}>
+            <h4 style={{ color: "var(--dark)", marginTop: 0, marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "8px" }}>
+              <i className="fa-solid fa-truck-fast" style={{ color: "var(--primary)" }}></i> Delivery Information
+            </h4>
+            <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.95rem", lineHeight: "1.5" }}>
+              Once your order is shipped, a secure <b>Delivery OTP</b> will be generated. You will need to show this OTP to the delivery executive to receive your package. 
+              <br /><br />
+              If you close this application, you can always view your OTP later by going to <b>My Account &gt; View Past History</b>.
+            </p>
           </div>
 
-          <div className="no-print" style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "3rem" }}>
-            <button 
-              className="btn btn-outline" 
-              onClick={() => window.print()}
-            >
-              <i className="fa-solid fa-print"></i> Print Invoice
-            </button>
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
             <Link 
-              href={`/tracking?orderId=${createdOrder.id}`} 
+              href="/account" 
+              className="btn btn-outline"
+            >
+              View Past History
+            </Link>
+            <Link 
+              href="/" 
               className="btn btn-primary"
             >
-              Track Shipment on BlueDart &rarr;
+              Continue Shopping
             </Link>
           </div>
         </div>

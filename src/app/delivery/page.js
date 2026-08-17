@@ -13,6 +13,7 @@ export default function DeliveryPortal() {
   const [loading, setLoading] = useState(false);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [prevAssignedCount, setPrevAssignedCount] = useState(null);
+  const [otpInput, setOtpInput] = useState("");
   
   // Toast notifications state
   const [toastMessage, setToastMessage] = useState("");
@@ -60,7 +61,16 @@ export default function DeliveryPortal() {
       const { data, error } = await supabase.from("orders").select("*");
       if (error) throw error;
 
-      let fetchedOrders = data || [];
+      let fetchedOrders = data ? data.map(dbOrder => ({
+        id: dbOrder.order_number || dbOrder.id,
+        date: dbOrder.created_at,
+        customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
+        shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
+        total: dbOrder.final_total || 0,
+        delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
+        paymentStatus: dbOrder.payment_status === 'SUCCESS' ? 'Paid' : 'Pending',
+        status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : 'Delivered')),
+      })) : [];
       fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
 
       // Filter assigned deliveries to monitor for new dispatches
@@ -113,19 +123,25 @@ export default function DeliveryPortal() {
   };
 
   const handleUpdateStatus = async (orderId, currentOrder, nextStatus) => {
+    if (nextStatus === "Delivered") {
+      if (!otpInput || otpInput !== currentOrder.delivery_otp) {
+        triggerToast("Invalid OTP. Please ask the customer for the correct OTP.");
+        return;
+      }
+    }
+
     try {
       const courierStatus = nextStatus === "Shipped" ? "In Transit" : (nextStatus === "Delivered" ? "Delivered" : "Returned");
-      const paymentStatus = nextStatus === "Delivered" ? "Paid" : currentOrder.paymentStatus;
+      const paymentStatus = nextStatus === "Delivered" ? "SUCCESS" : (currentOrder.paymentStatus === "Paid" ? "SUCCESS" : currentOrder.paymentStatus);
 
       // Update Supabase
       const { error } = await supabase
         .from("orders")
         .update({
-          status: nextStatus,
-          courierStatus,
-          paymentStatus
+          order_status: nextStatus === 'Pending' ? 'NEW' : (nextStatus === 'Packed' ? 'PACKED' : (nextStatus === 'Shipped' ? 'DISPATCHED' : (nextStatus === 'Delivered' ? 'DELIVERED' : 'RETURNED'))),
+          payment_status: paymentStatus === 'SUCCESS' ? 'SUCCESS' : 'PENDING'
         })
-        .eq("id", orderId);
+        .eq("order_number", orderId);
 
       if (error) throw error;
 
@@ -150,6 +166,7 @@ export default function DeliveryPortal() {
         console.error("Error syncing update to Google Sheets webhook:", err);
       }
 
+      setOtpInput("");
       triggerToast(`Order status updated to ${nextStatus}`);
       loadOrders();
     } catch (e) {
@@ -335,7 +352,7 @@ export default function DeliveryPortal() {
 
                 {/* Actions button strip */}
                 {activeTab === "assigned" && (
-                  <div className="action-row">
+                  <div className="action-row" style={{ flexDirection: 'column', gap: '15px' }}>
                     {order.status === "Packed" || order.status === "Pending" ? (
                       <button
                         onClick={() => handleUpdateStatus(order.id, order, "Shipped")}
@@ -346,18 +363,52 @@ export default function DeliveryPortal() {
                       </button>
                     ) : (
                       <>
-                        <button
-                          onClick={() => handleUpdateStatus(order.id, order, "Delivered")}
-                          className="action-btn-primary"
-                        >
-                          <i className="fa-solid fa-circle-check"></i> Mark Delivered
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(order.id, order, "Returned")}
-                          className="action-btn-secondary"
-                        >
-                          <i className="fa-solid fa-circle-xmark"></i> Failed / Return
-                        </button>
+                        <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', border: '1px solid #ddd' }}>
+                          <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#333' }}>Payment Collection</h4>
+                          {order.paymentStatus === 'Paid' ? (
+                            <div style={{ color: 'var(--success)', fontWeight: 'bold' }}>
+                              <i className="fa-solid fa-check-circle"></i> Prepaid Order - No collection needed.
+                            </div>
+                          ) : (
+                            <div style={{ textAlign: 'center' }}>
+                              <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', fontSize: '1.2rem' }}>To Collect: ₹{order.total}</p>
+                              {/* Dummy QR Code */}
+                              <div style={{ background: '#fff', padding: '10px', display: 'inline-block', border: '1px solid #ccc', borderRadius: '8px', marginBottom: '10px' }}>
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=orientcrockeries@upi&pn=OrientCrockeries&am=0" alt="UPI QR Code" style={{ width: '150px', height: '150px' }} />
+                              </div>
+                              <p style={{ fontSize: '0.8rem', color: '#666', margin: 0 }}>Customer can scan to pay via UPI</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ background: '#fff9e6', padding: '15px', borderRadius: '8px', border: '1px dashed #d4af37' }}>
+                          <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#333' }}>Proof of Delivery (OTP)</h4>
+                          <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 10px 0' }}>Ask the customer for the 6-digit OTP shown in their account.</p>
+                          <input 
+                            type="text" 
+                            placeholder="Enter 6-digit OTP" 
+                            value={otpInput}
+                            onChange={(e) => setOtpInput(e.target.value)}
+                            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '1.1rem', textAlign: 'center', letterSpacing: '2px', marginBottom: '10px' }}
+                            maxLength={6}
+                          />
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => handleUpdateStatus(order.id, order, "Delivered")}
+                              className="action-btn-primary"
+                              style={{ flex: 1 }}
+                            >
+                              <i className="fa-solid fa-circle-check"></i> Verify & Deliver
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(order.id, order, "Returned")}
+                              className="action-btn-secondary"
+                              style={{ padding: '10px 15px' }}
+                            >
+                              <i className="fa-solid fa-circle-xmark"></i> Return
+                            </button>
+                          </div>
+                        </div>
                       </>
                     )}
                   </div>

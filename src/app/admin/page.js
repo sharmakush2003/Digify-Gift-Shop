@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  getProducts, 
-  saveProducts, 
-  updateProduct,
-  getOrders,
-  updateOrderStatus
+  fetchProducts,
+  updateOrderStatus,
+  getOrders
 } from "../db";
 import { supabase } from "../../supabase";
+import CouponsTab from "./CouponsTab";
+import InstructionsTab from "./InstructionsTab";
+import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
@@ -64,6 +65,23 @@ export default function AdminPage() {
   const [bulkUploadStatus, setBulkUploadStatus] = useState("");
   const [isBulkUploading, setIsBulkUploading] = useState(false);
 
+  // Add Product State
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    price: "",
+    stock: "",
+    stockStatus: "Available",
+    department: "Crockery & Dining",
+    barcode: "",
+    hsn: "",
+    gst: 18,
+    description: "",
+    fragile: false,
+    microwave: false,
+    category: "General"
+  });
+
   // Single Upload states
   const [singleUploadImages, setSingleUploadImages] = useState([]);
   const [isSingleUploading, setIsSingleUploading] = useState(false);
@@ -85,8 +103,32 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase.from('orders').select('*');
       if (error) throw error;
-      let ordersData = data || [];
-      ordersData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      let ordersData = data ? data.map(dbOrder => ({
+        id: dbOrder.order_number || dbOrder.id,
+        _docId: dbOrder.id,
+        date: dbOrder.created_at,
+        customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
+        customerPhone: dbOrder.guest_phone || 'N/A',
+        shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
+        items: [], // Will require order_items join later, stub for now
+        subtotal: dbOrder.total_mrp || 0,
+        shipping: dbOrder.shipping_charge || 0,
+        discount: dbOrder.discount_amount || 0,
+        total: dbOrder.final_total || 0,
+        status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : 'Shipped'),
+        courierStatus: 'In Warehouse'
+      })) : [];
+      
+      // Merge with local storage orders so recent tests aren't lost
+      const localOrders = getOrders();
+      if (localOrders && localOrders.length > 0) {
+        // Only add local orders that aren't already in Supabase (by ID)
+        const supabaseOrderIds = new Set(ordersData.map(o => o.order_number || o.id));
+        const missingLocalOrders = localOrders.filter(o => !supabaseOrderIds.has(o.id));
+        ordersData = [...ordersData, ...missingLocalOrders];
+      }
+
+      ordersData.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
       setOrdersList(ordersData);
     } catch (e) {
       console.warn("Failed to load orders from Supabase", e);
@@ -161,23 +203,111 @@ export default function AdminPage() {
     }
   };
 
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    setIsSingleUploading(true);
+    setSingleUploadStatus("Uploading images...");
+    try {
+      const uploadedImageUrls = [];
+      if (singleUploadImages.length > 0) {
+        for (const file of singleUploadImages) {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, file);
+          if (uploadError) throw uploadError;
+          const { data } = supabase.storage.from('product-images').getPublicUrl(fileName);
+          uploadedImageUrls.push(data.publicUrl);
+        }
+      }
+
+      setSingleUploadStatus("Saving to database...");
+      const id = Date.now().toString().slice(-6); // generate pseudo ID
+      const newProductRecord = {
+        id: id,
+        name: newProduct.name,
+        price: parseFloat(newProduct.price),
+        stock: parseInt(newProduct.stock),
+        department: newProduct.department,
+        category: newProduct.category,
+        barcode: newProduct.barcode,
+        hsn: newProduct.hsn,
+        gst: parseFloat(newProduct.gst),
+        description: newProduct.description,
+        fragile: newProduct.fragile,
+        microwave: newProduct.microwave,
+        image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg'
+      };
+
+      const { error: insertError } = await supabase.from('products').insert(newProductRecord);
+      if (insertError) throw insertError;
+
+      triggerToast("Product added successfully!");
+      setShowAddProductModal(false);
+      setNewProduct({
+        name: "", price: "", stock: "", stockStatus: "Available", department: "Crockery & Dining",
+        barcode: "", hsn: "", gst: 18, description: "", fragile: false, microwave: false, category: "General"
+      });
+      setSingleUploadImages([]);
+      loadDbData();
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to add product: " + err.message);
+    } finally {
+      setIsSingleUploading(false);
+      setSingleUploadStatus("");
+    }
+  };
+
   const handleLogout = () => {
     setIsLoggedIn(false);
     localStorage.removeItem("orient_is_admin");
     triggerToast("Logged out successfully");
   };
 
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm(`Are you sure you want to delete Product #${productId}? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', productId);
+      if (error) throw error;
+      triggerToast("Product deleted successfully");
+      loadDbData();
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to delete product: " + err.message);
+    }
+  };
+
   const handleProcessOrder = async (orderId, nextStatus, docId) => {
     try {
       const courierStatus = nextStatus === "Packed" ? "In Warehouse" : (nextStatus === "Shipped" ? "In Transit" : "Delivered");
       const currentOrder = ordersList.find(o => o.id === orderId);
-      const paymentStatus = nextStatus === "Delivered" ? "Paid" : (currentOrder ? currentOrder.paymentStatus : "Paid");
+      const paymentStatus = nextStatus === "Delivered" ? "SUCCESS" : (currentOrder && currentOrder.paymentStatus === "Paid" ? "SUCCESS" : (currentOrder ? currentOrder.paymentStatus : "SUCCESS"));
 
-      await supabase.from('orders').update({
-        status: nextStatus,
-        courierStatus,
-        paymentStatus
-      }).eq('id', orderId);
+      // Handle OTP generation when marking as Shipped
+      let otpGenerated = null;
+      let newShippingAddress = null;
+      
+      const { data: dbRecord } = await supabase.from('orders').select('shipping_address').eq('order_number', orderId).single();
+      if (dbRecord && dbRecord.shipping_address) {
+        newShippingAddress = { ...dbRecord.shipping_address };
+        if (nextStatus === "Shipped" && !newShippingAddress.delivery_otp) {
+          otpGenerated = Math.floor(100000 + Math.random() * 900000).toString();
+          newShippingAddress.delivery_otp = otpGenerated;
+        }
+      }
+
+      const updateData = {
+        order_status: nextStatus === 'Pending' ? 'NEW' : (nextStatus === 'Packed' ? 'PACKED' : (nextStatus === 'Shipped' ? 'DISPATCHED' : 'DELIVERED')),
+        payment_status: paymentStatus === 'SUCCESS' ? 'SUCCESS' : 'PENDING'
+      };
+      
+      if (newShippingAddress) {
+        updateData.shipping_address = newShippingAddress;
+      }
+
+      await supabase.from('orders').update(updateData).eq('order_number', orderId);
 
       // Trigger Google Sheets Webhook Update
       try {
@@ -684,6 +814,18 @@ export default function AdminPage() {
           >
             <i className="fa-solid fa-boxes-stacked"></i> Inventory Registry
           </button>
+          <button 
+            className={`tab-btn ${activeTab === "coupons" ? "active" : ""}`}
+            onClick={() => setActiveTab("coupons")}
+          >
+            <i className="fa-solid fa-ticket"></i> Coupons & Promos
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === "instructions" ? "active" : ""}`}
+            onClick={() => setActiveTab("instructions")}
+          >
+            <i className="fa-solid fa-book-open"></i> Help & Instructions
+          </button>
         </div>
 
         {/* Tab 1: Orders Queue */}
@@ -695,6 +837,13 @@ export default function AdminPage() {
                 <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
               </div>
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button 
+                  className="btn btn-outline btn-sm" 
+                  onClick={loadDbData}
+                  style={{ height: '38px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                >
+                  <i className="fa-solid fa-arrows-rotate"></i> Refresh
+                </button>
                 <button 
                   className="btn btn-outline btn-sm" 
                   onClick={exportOrdersToCSV}
@@ -771,18 +920,10 @@ export default function AdminPage() {
                                 style={{ borderColor: "var(--primary)", color: "var(--primary)" }}
                                 onClick={() => handleProcessOrder(order.id, "Shipped", order._docId)}
                               >
-                                <i className="fa-solid fa-truck-fast"></i> Ship BlueDart
+                                <i className="fa-solid fa-truck-fast"></i> Ship to Delivery Man
                               </button>
                             )}
-                            {order.status === "Shipped" && (
-                              <button 
-                                className="btn btn-outline btn-sm" 
-                                style={{ borderColor: "var(--success)", color: "var(--success)" }}
-                                onClick={() => handleProcessOrder(order.id, "Delivered", order._docId)}
-                              >
-                                <i className="fa-solid fa-circle-check"></i> Complete
-                              </button>
-                            )}
+
                             <button 
                               className="btn btn-outline btn-sm"
                               onClick={() => setInvoiceOrder(order)}
@@ -819,6 +960,9 @@ export default function AdminPage() {
                 />
                 <button className="btn btn-outline btn-sm" onClick={() => setShowBulkUploadModal(true)} style={{ borderColor: "var(--primary)", color: "var(--primary)" }}>
                   <i className="fa-solid fa-file-import"></i> Bulk Import
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowAddProductModal(true)}>
+                  <i className="fa-solid fa-plus"></i> Single Add
                 </button>
                 <button className="btn btn-primary btn-sm" onClick={() => setShowComboModal(true)}>
                   <i className="fa-solid fa-circle-plus"></i> Create Gift Hamper
@@ -869,12 +1013,22 @@ export default function AdminPage() {
                         </div>
                       </td>
                       <td>
-                        <button 
-                          className="btn btn-outline btn-sm" 
-                          onClick={() => setEditingProduct({ ...p })}
-                        >
-                          <i className="fa-regular fa-pen-to-square"></i> Edit Product
-                        </button>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button 
+                            className="btn btn-outline btn-sm" 
+                            onClick={() => setEditingProduct({ ...p })}
+                          >
+                            <i className="fa-regular fa-pen-to-square"></i> Edit
+                          </button>
+                          <button 
+                            className="btn btn-outline btn-sm" 
+                            style={{ borderColor: "var(--error)", color: "var(--error)" }}
+                            onClick={() => handleDeleteProduct(p.id)}
+                            title="Delete Product"
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -885,6 +1039,157 @@ export default function AdminPage() {
         )}
       </div>
       {/* Modals are placed below main */}
+
+      {/* Add Product Modal Form */}
+      {showAddProductModal && (
+        <div className="modal-overlay active" onClick={() => { setShowAddProductModal(false); setSingleUploadImages([]); }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+            <button className="modal-close-btn" onClick={() => { setShowAddProductModal(false); setSingleUploadImages([]); }}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+            
+            <form onSubmit={handleAddProduct} style={{ padding: "20px", overflowY: "auto", maxHeight: "80vh" }}>
+              <span className="modal-meta-label">Add a new product</span>
+              <h2 className="modal-title" style={{ fontSize: "1.6rem" }}>Create Single Product</h2>
+              
+              <div className="form-grid" style={{ marginBottom: "1.5rem" }}>
+                <div className="form-group full-width">
+                  <span className="form-label">Product Name</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    required
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Price (₹)</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    required
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Stock Units</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    required
+                    value={newProduct.stock}
+                    onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Stock Status</span>
+                  <select 
+                    className="sort-select"
+                    value={newProduct.stockStatus}
+                    onChange={(e) => setNewProduct({ ...newProduct, stockStatus: e.target.value })}
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Barcode</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={newProduct.barcode}
+                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">HSN Code</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={newProduct.hsn}
+                    onChange={(e) => setNewProduct({ ...newProduct, hsn: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">GST Rate (%)</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    value={newProduct.gst}
+                    onChange={(e) => setNewProduct({ ...newProduct, gst: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <span className="form-label">Department</span>
+                  <select 
+                    className="sort-select"
+                    value={newProduct.department}
+                    onChange={(e) => setNewProduct({ ...newProduct, department: e.target.value })}
+                  >
+                    <option value="Gifting">Gifting</option>
+                    <option value="Crockery & Dining">Crockery & Dining</option>
+                    <option value="Cookware">Cookware</option>
+                    <option value="Woodcraft">Woodcraft</option>
+                    <option value="Home Décor">Home Décor</option>
+                  </select>
+                </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label">Product Description</span>
+                  <textarea 
+                    className="form-input" 
+                    rows="3"
+                    placeholder="Enter detailed description here..."
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                    style={{ resize: "vertical", width: "100%" }}
+                  />
+                </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label">Upload Images</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
+                    disabled={isSingleUploading}
+                    className="form-input"
+                    style={{ paddingTop: "6px" }}
+                  />
+                  {singleUploadImages.length > 0 && (
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.75rem", color: "var(--primary)" }}>
+                      {singleUploadImages.length} image(s) selected
+                    </p>
+                  )}
+                </div>
+                <div className="form-group full-width" style={{ flexDirection: "row", gap: "20px", marginTop: "10px" }}>
+                  <label className="filter-checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={newProduct.fragile}
+                      onChange={(e) => setNewProduct({ ...newProduct, fragile: e.target.checked })}
+                    />
+                    <span>Fragile Handling</span>
+                  </label>
+                  <label className="filter-checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={newProduct.microwave}
+                      onChange={(e) => setNewProduct({ ...newProduct, microwave: e.target.checked })}
+                    />
+                    <span>Microwave Safe</span>
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-full" disabled={isSingleUploading}>
+                {isSingleUploading ? singleUploadStatus || "Creating..." : "Create Product"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Product Modal Form */}
       {editingProduct && (
@@ -1282,8 +1587,8 @@ export default function AdminPage() {
               </div>
 
               <div style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: "2rem" }}>
-                <button className="btn btn-outline" onClick={() => window.print()}>
-                  <i className="fa-solid fa-print"></i> Trigger Print System
+                <button className="btn btn-outline" onClick={() => generateInvoicePDF(invoiceOrder)}>
+                  <i className="fa-solid fa-file-pdf"></i> Download PDF Invoice
                 </button>
                 <button className="btn btn-primary" onClick={() => setInvoiceOrder(null)}>
                   Close Review
@@ -1375,6 +1680,12 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Tab 3: Coupons */}
+      {activeTab === "coupons" && <CouponsTab />}
+
+      {/* Tab 4: Instructions */}
+      {activeTab === "instructions" && <InstructionsTab />}
 
       {/* Floating Toast Notification */}
       <div className={`toast toast-success ${showToast ? "show" : ""}`}>
