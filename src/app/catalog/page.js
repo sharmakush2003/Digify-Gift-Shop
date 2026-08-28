@@ -401,6 +401,50 @@ function CatalogContent() {
                 </div>
               </div>
 
+              {selectedProduct.reviews && selectedProduct.reviews.length > 0 && (
+                <div style={{ marginTop: "2rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1.5rem" }}>
+                    <h3 style={{ fontSize: "1.1rem", fontWeight: "700", color: "#1e293b", margin: 0 }}>Customer Reviews</h3>
+                    <span style={{ backgroundColor: "#f1f5f9", color: "#475569", padding: "2px 8px", borderRadius: "12px", fontSize: "0.8rem", fontWeight: "600" }}>
+                      {selectedProduct.reviews.length} {selectedProduct.reviews.length === 1 ? 'Review' : 'Reviews'}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxHeight: "250px", overflowY: "auto", paddingRight: "8px" }}>
+                    {selectedProduct.reviews.map((review, idx) => {
+                      const initial = review.reviewerName ? review.reviewerName.charAt(0).toUpperCase() : "U";
+                      const dateObj = review.timestamp ? new Date(review.timestamp) : new Date();
+                      const dateStr = dateObj.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+                      return (
+                        <div key={idx} style={{ paddingBottom: "16px", borderBottom: idx !== selectedProduct.reviews.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "#e0e7ff", color: "#4338ca", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "1rem", flexShrink: 0 }}>
+                              {initial}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: "600", fontSize: "0.95rem", color: "#334155" }}>{review.reviewerName}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                                <div style={{ fontSize: "0.9rem", display: "flex", letterSpacing: "1px" }}>
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <span key={i} style={{ color: i < review.rating ? "#f59e0b" : "#e2e8f0" }}>★</span>
+                                  ))}
+                                </div>
+                                <span style={{ color: "#94a3b8", fontSize: "0.75rem", fontWeight: "500" }}>{dateStr}</span>
+                              </div>
+                            </div>
+                            <div style={{ color: "#10b981", fontSize: "0.75rem", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px", backgroundColor: "#ecfdf5", padding: "4px 8px", borderRadius: "4px" }}>
+                              <i className="fa-solid fa-circle-check"></i> Verified
+                            </div>
+                          </div>
+                          <p style={{ fontSize: "0.9rem", color: "#475569", margin: "4px 0 0 0", lineHeight: "1.5", paddingLeft: "48px" }}>
+                            {review.comment}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="modal-cart-actions">
                 <button 
                   className="btn btn-primary btn-full"
