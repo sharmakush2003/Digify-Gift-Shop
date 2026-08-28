@@ -270,7 +270,7 @@ export default function CheckoutPage() {
     // If backend order exists, use it, else fallback to mock structure
     const fallbackOrderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
     const orderData = backendOrderData ? {
-      id: backendOrderData.id,
+      id: backendOrderData.order_number || backendOrderData.id,
       order_number: backendOrderData.order_number,
       date: backendOrderData.created_at || new Date().toISOString(),
       customerName: name,

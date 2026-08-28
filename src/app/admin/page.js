@@ -122,8 +122,8 @@ export default function AdminPage() {
       // Merge with local storage orders so recent tests aren't lost
       const localOrders = getOrders();
       if (localOrders && localOrders.length > 0) {
-        // Only add local orders that aren't already in Supabase (by ID)
-        const supabaseOrderIds = new Set(ordersData.map(o => o.order_number || o.id));
+        // Only add local orders that aren't already in Supabase (by ID or UUID)
+        const supabaseOrderIds = new Set(ordersData.flatMap(o => [o.order_number, o.id, o._docId]).filter(Boolean));
         const missingLocalOrders = localOrders.filter(o => !supabaseOrderIds.has(o.id));
         ordersData = [...ordersData, ...missingLocalOrders];
       }
