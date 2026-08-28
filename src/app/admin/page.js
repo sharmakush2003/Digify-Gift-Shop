@@ -115,7 +115,7 @@ export default function AdminPage() {
         shipping: dbOrder.shipping_charge || 0,
         discount: dbOrder.discount_amount || 0,
         total: dbOrder.final_total || 0,
-        status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : 'Shipped'),
+        status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
         courierStatus: 'In Warehouse'
       })) : [];
       
@@ -174,14 +174,10 @@ export default function AdminPage() {
       return;
     }
 
-    if (loginEmail.trim().toLowerCase() === "admin@orient.com" && loginPassword.trim() === "admin123") {
-      setIsLoggedIn(true);
-      setAuthError("");
-      localStorage.setItem("orient_is_admin", "true");
-      triggerToast("Logged in successfully (Developer Bypass)");
-      return;
-    }
-
+    setAuthError("");
+    
+    // NOTE: Developer bypass removed. Admins MUST authenticate via Supabase Auth.
+    
     try {
       const userCredential = await login(loginEmail, loginPassword);
       if (userCredential && userCredential.user) {

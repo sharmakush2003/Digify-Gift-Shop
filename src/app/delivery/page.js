@@ -58,10 +58,16 @@ export default function DeliveryPortal() {
   const loadOrders = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const { data, error } = await supabase.from("orders").select("*");
-      if (error) throw error;
+      const res = await fetch('/api/delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'fetch', pin: '1994' })
+      });
+      const { data, error, success, orders } = await res.json();
+      if (!success) throw new Error("Failed to fetch orders");
+      const fetchedData = orders || data;
 
-      let fetchedOrders = data ? data.map(dbOrder => ({
+      let fetchedOrders = fetchedData ? fetchedData.map(dbOrder => ({
         id: dbOrder.order_number || dbOrder.id,
         date: dbOrder.created_at,
         customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
@@ -69,7 +75,7 @@ export default function DeliveryPortal() {
         total: dbOrder.final_total || 0,
         delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
         paymentStatus: dbOrder.payment_status === 'SUCCESS' ? 'Paid' : 'Pending',
-        status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : 'Delivered')),
+        status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
       })) : [];
       fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -134,16 +140,22 @@ export default function DeliveryPortal() {
       const courierStatus = nextStatus === "Shipped" ? "In Transit" : (nextStatus === "Delivered" ? "Delivered" : "Returned");
       const paymentStatus = nextStatus === "Delivered" ? "SUCCESS" : (currentOrder.paymentStatus === "Paid" ? "SUCCESS" : currentOrder.paymentStatus);
 
-      // Update Supabase
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          order_status: nextStatus === 'Pending' ? 'NEW' : (nextStatus === 'Packed' ? 'PACKED' : (nextStatus === 'Shipped' ? 'DISPATCHED' : (nextStatus === 'Delivered' ? 'DELIVERED' : 'RETURNED'))),
-          payment_status: paymentStatus === 'SUCCESS' ? 'SUCCESS' : 'PENDING'
+      const res = await fetch('/api/delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          pin: '1994',
+          orderId: orderId,
+          updateData: {
+            order_status: nextStatus === 'Pending' ? 'NEW' : (nextStatus === 'Packed' ? 'PACKED' : (nextStatus === 'Shipped' ? 'DISPATCHED' : (nextStatus === 'Delivered' ? 'DELIVERED' : 'RETURNED'))),
+            payment_status: paymentStatus === 'SUCCESS' ? 'SUCCESS' : 'PENDING'
+          }
         })
-        .eq("order_number", orderId);
-
-      if (error) throw error;
+      });
+      
+      const { success, error } = await res.json();
+      if (!success) throw new Error(error || "Update failed");
 
       // Trigger Google Sheets Webhook Update
       try {

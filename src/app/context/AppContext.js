@@ -83,7 +83,7 @@ export function AppProvider({ children }) {
                 delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
                 total: dbOrder.final_total || 0,
                 items: matchedLocal ? matchedLocal.items : [], 
-                status: dbOrder.order_status === 'NEW' ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : 'Delivered')),
+                status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
               };
             });
             const sorted = mappedOrders.sort((a,b) => new Date(b.date) - new Date(a.date));
