@@ -22,6 +22,7 @@ export default function AdminPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
   const [isMobile, setIsMobile] = useState(false);
 
@@ -715,47 +716,208 @@ export default function AdminPage() {
     );
   }
 
-  // Render Authentication form if not logged in
   if (!isLoggedIn) {
     return (
-      <div className="auth-container active" style={{ marginTop: "60px" }}>
-        <div className="auth-card">
-          <div className="auth-header">
-            <span className="logo" style={{ fontSize: "1.8rem" }}>ORIENT</span>
-            <span className="logo-tagline" style={{ display: "block", fontSize: "0.55rem" }}>Crockeries</span>
-            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "1.4rem", marginTop: "1rem" }}>ERP Administrator Access</h2>
-            <p>Verification required to connect local databases</p>
+      <div style={{ 
+        minHeight: "100vh", 
+        display: "flex", 
+        backgroundColor: "#f5f7fa",
+        fontFamily: "'Inter', sans-serif"
+      }}>
+        {/* Left Side - Branding (Hidden on small screens, but Admin is desktop only anyway) */}
+        <div style={{
+          flex: 1,
+          backgroundColor: "#000",
+          backgroundImage: "linear-gradient(135deg, #111 0%, #222 100%)",
+          color: "white",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: "4rem",
+          position: "relative",
+          overflow: "hidden"
+        }}>
+          <div style={{ position: "relative", zIndex: 2 }}>
+            <h1 style={{ color: "white", fontSize: "3.5rem", fontFamily: "var(--font-serif)", marginBottom: "1rem", letterSpacing: "2px" }}>
+              Orient <span style={{ color: "#d4af37" }}>Admin</span>
+            </h1>
+            <p style={{ fontSize: "1.2rem", color: "#aaa", maxWidth: "400px", lineHeight: "1.6", marginBottom: "3rem" }}>
+              Secure portal for managing inventory, tracking orders, and overseeing Orient Crockeries operations.
+            </p>
           </div>
-          
-          <form onSubmit={handleLogin} className="auth-form active">
-            <div className="form-group">
-              <span className="form-label">Administrator Email</span>
-              <input 
-                type="email" 
-                className="form-input" 
-                placeholder="admin@orient.com" 
-                required 
-                value={loginEmail} 
-                onChange={(e) => setLoginEmail(e.target.value)} 
-              />
+          {/* Decorative elements */}
+          <div style={{
+            position: "absolute",
+            top: "-10%",
+            right: "-10%",
+            width: "500px",
+            height: "500px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(212,175,55,0.1) 0%, rgba(0,0,0,0) 70%)",
+            zIndex: 1
+          }}></div>
+        </div>
+
+        {/* Right Side - Login Form */}
+        <div style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#ffffff",
+          padding: "2rem"
+        }}>
+          <div style={{ width: "100%", maxWidth: "420px" }}>
+            <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+              <div style={{ 
+                width: "60px", 
+                height: "60px", 
+                backgroundColor: "#f5f7fa", 
+                borderRadius: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 1.5rem auto",
+                color: "#111",
+                fontSize: "1.5rem"
+              }}>
+                <i className="fa-solid fa-shield-halved"></i>
+              </div>
+              <h2 style={{ fontSize: "1.8rem", color: "#111", marginBottom: "0.5rem", fontWeight: "600" }}>Welcome Back</h2>
+              <p style={{ color: "#666", fontSize: "0.95rem" }}>Please enter your credentials to access the dashboard.</p>
             </div>
-            <div className="form-group">
-              <span className="form-label">Password</span>
-              <input 
-                type="password" 
-                className="form-input" 
-                placeholder="Password" 
-                required 
-                value={loginPassword} 
-                onChange={(e) => setLoginPassword(e.target.value)} 
-              />
-            </div>
-            {authError && <p style={{ color: "var(--error)", fontSize: "0.8rem", textAlign: "center" }}>{authError}</p>}
             
-            <button type="submit" className="btn btn-primary" style={{ marginTop: "1rem" }}>
-              Secure Credentials Login
-            </button>
-          </form>
+            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "600", color: "#444", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Email Address
+                </label>
+                <div style={{ position: "relative" }}>
+                  <div style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", color: "#999" }}>
+                    <i className="fa-regular fa-envelope"></i>
+                  </div>
+                  <input 
+                    type="email" 
+                    placeholder="admin@orient.com" 
+                    required 
+                    value={loginEmail} 
+                    onChange={(e) => setLoginEmail(e.target.value)} 
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 15px 14px 45px', 
+                      border: '1.5px solid #eaeaea', 
+                      borderRadius: '8px', 
+                      fontSize: '1rem', 
+                      backgroundColor: '#fff', 
+                      color: '#333',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#111'}
+                    onBlur={(e) => e.target.style.borderColor = '#eaeaea'}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "600", color: "#444", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Password
+                </label>
+                <div style={{ position: "relative" }}>
+                  <div style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", color: "#999" }}>
+                    <i className="fa-solid fa-lock"></i>
+                  </div>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Enter your password" 
+                    required 
+                    value={loginPassword} 
+                    onChange={(e) => setLoginPassword(e.target.value)} 
+                    style={{ 
+                      width: '100%', 
+                      padding: '14px 45px 14px 45px', 
+                      border: '1.5px solid #eaeaea', 
+                      borderRadius: '8px', 
+                      fontSize: '1rem', 
+                      backgroundColor: '#fff', 
+                      color: '#333',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#111'}
+                    onBlur={(e) => e.target.style.borderColor = '#eaeaea'}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ 
+                      position: 'absolute', 
+                      right: '15px', 
+                      top: "50%", 
+                      transform: "translateY(-50%)",
+                      background: 'none', 
+                      border: 'none', 
+                      cursor: 'pointer', 
+                      color: '#999',
+                      padding: "5px"
+                    }}
+                  >
+                    <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  </button>
+                </div>
+              </div>
+
+              {authError && (
+                <div style={{ 
+                  backgroundColor: "#fef2f2", 
+                  border: "1px solid #fecaca", 
+                  color: "#dc2626", 
+                  padding: "12px", 
+                  borderRadius: "6px", 
+                  fontSize: "0.85rem", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "8px",
+                  marginTop: "5px"
+                }}>
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <span>{authError}</span>
+                </div>
+              )}
+              
+              <button 
+                type="submit" 
+                style={{ 
+                  marginTop: "1rem",
+                  width: "100%",
+                  padding: "14px",
+                  backgroundColor: "#111",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "1rem",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = "#333"}
+                onMouseOut={(e) => e.target.style.backgroundColor = "#111"}
+              >
+                Sign In to Dashboard
+              </button>
+            </form>
+
+            <div style={{ textAlign: "center", marginTop: "2rem" }}>
+              <p style={{ color: "#888", fontSize: "0.85rem", margin: "0 0 5px 0" }}>
+                &copy; {new Date().getFullYear()} Orient Crockeries. All rights reserved.
+              </p>
+              <p style={{ color: "#aaa", fontSize: "0.8rem", margin: 0 }}>
+                Developed & Managed by <strong style={{ color: "#444" }}>Digify Soft Solution</strong>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
