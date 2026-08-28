@@ -146,7 +146,7 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           items: cart,
-          couponCode: appliedCoupon?.code || null,
+          couponCode: promoCode || null,
           shippingFee: shippingFee,
           customerDetails: {
             name, email, phone,
@@ -196,7 +196,7 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           items: cart,
-          couponCode: appliedCoupon?.code || null,
+          couponCode: promoCode || null,
           shippingFee: shippingFee,
           customerDetails: {
             name, email, phone,
