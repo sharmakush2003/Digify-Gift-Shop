@@ -405,52 +405,61 @@ export default function Home() {
               )}
             </div>
             <div className="modal-content-side">
-              <div className="modal-header">
-                <span className="modal-meta-label">{selectedProduct.department}</span>
+              <div className="modal-header" style={{ marginBottom: "1rem", borderBottom: "none", paddingBottom: 0 }}>
+                <span className="modal-meta-label">
+                  <i className="fa-solid fa-gem" style={{ fontSize: "0.75rem" }}></i>
+                  {selectedProduct.department}
+                </span>
                 <h2 className="modal-title">{selectedProduct.name}</h2>
                 <p className="modal-desc">{selectedProduct.description}</p>
-              </div>
-
-              <div className="specs-grid">
-                <div className="spec-item">
-                  <span className="spec-label">Barcode</span>
-                  <span className="spec-value">{selectedProduct.barcode}</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">HSN Code</span>
-                  <span className="spec-value">{selectedProduct.hsn}</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">GST Rate</span>
-                  <span className="spec-value">{selectedProduct.gst}%</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Fragile status</span>
-                  <span className="spec-value">{selectedProduct.fragile ? "Fragile Item" : "Standard"}</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Microwave safe</span>
-                  <span className="spec-value">{selectedProduct.microwave ? "Safe" : "Not Recommended"}</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Availability</span>
-                  <span className="spec-value" style={{ color: (selectedProduct.stock > 0 && selectedProduct.stockStatus !== 'Out of Stock') ? "var(--success)" : "var(--error)" }}>
-                    {(selectedProduct.stockStatus === 'Out of Stock' || selectedProduct.stock <= 0) ? "Sold Out" : `${selectedProduct.stock} In Stock`}
-                  </span>
+                
+                {/* Repositioned & Attractive Add To Shopping Cart Action */}
+                <div className="modal-cart-actions" style={{ marginTop: "1.2rem", marginBottom: "1rem" }}>
+                  <button 
+                    className="btn-add-to-cart-attractive"
+                    onClick={(e) => {
+                      handleAddToCart(selectedProduct, e);
+                      setSelectedProduct(null);
+                    }}
+                    disabled={selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock'}
+                  >
+                    <i className="fa-solid fa-cart-shopping" style={{ fontSize: "1.1rem" }}></i>
+                    <span>{(selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock') ? "Temporarily Unavailable" : "Add to Shopping Cart"}</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="modal-cart-actions">
-                <button 
-                  className="btn btn-primary btn-full"
-                  onClick={(e) => {
-                    handleAddToCart(selectedProduct, e);
-                    setSelectedProduct(null);
-                  }}
-                  disabled={selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock'}
-                >
-                  {(selectedProduct.stock <= 0 || selectedProduct.stockStatus === 'Out of Stock') ? "Temporarily Unavailable" : "Add to Shopping Cart"}
-                </button>
+              {/* Premium Feature Spec Badges */}
+              <div className="product-highlights-badges">
+                <div className="highlight-badge-card">
+                  <div className="badge-icon-box gst">
+                    <i className="fa-solid fa-percent"></i>
+                  </div>
+                  <div className="badge-text-box">
+                    <span className="badge-title">GST RATE</span>
+                    <span className="badge-val">{selectedProduct.gst || 18}% Incl.</span>
+                  </div>
+                </div>
+
+                <div className="highlight-badge-card">
+                  <div className={`badge-icon-box ${selectedProduct.fragile ? 'fragile' : 'standard'}`}>
+                    <i className={`fa-solid ${selectedProduct.fragile ? 'fa-shield-halved' : 'fa-box-archive'}`}></i>
+                  </div>
+                  <div className="badge-text-box">
+                    <span className="badge-title">HANDLING</span>
+                    <span className="badge-val">{selectedProduct.fragile ? "Fragile Item" : "Standard"}</span>
+                  </div>
+                </div>
+
+                <div className="highlight-badge-card">
+                  <div className={`badge-icon-box ${selectedProduct.microwave ? 'microwave-safe' : 'microwave-warn'}`}>
+                    <i className={`fa-solid ${selectedProduct.microwave ? 'fa-fire-burner' : 'fa-triangle-exclamation'}`}></i>
+                  </div>
+                  <div className="badge-text-box">
+                    <span className="badge-title">MICROWAVE</span>
+                    <span className="badge-val">{selectedProduct.microwave ? "Safe" : "Not Safe"}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

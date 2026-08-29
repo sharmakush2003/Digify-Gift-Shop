@@ -8,19 +8,27 @@ import './auth.css';
 export default function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, login, signup, resetPassword, updatePassword } = useAuth();
+  const { user, login, signup, sendOtp, verifyOtp, resetPassword, updatePassword } = useAuth();
   
   const [isLogin, setIsLogin] = useState(true);
+  const [authMethod, setAuthMethod] = useState('password'); // 'password' | 'otp'
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   
-  // Synchronously determine if we are in reset mode from the URL
+  // URL params for password reset mode
   const isResetMode = searchParams.get('reset') === 'true';
   const [resetSent, setResetSent] = useState(false);
   
+  // Form input states
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // OTP states
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -32,6 +40,56 @@ export default function AuthPage() {
       router.push('/');
     }
   }, [user, router, isResetMode]);
+
+  // Resend OTP Countdown Timer
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleSendOtp = async () => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const res = await sendOtp(phone);
+      setOtpSent(true);
+      setCountdown(60);
+      setSuccess(`OTP sent to +91 ${cleanPhone.slice(-10)}! (Use demo code 123456 or SMS OTP)`);
+    } catch (err) {
+      setError(err.message || 'Failed to send OTP. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.length < 6) {
+      setError('Please enter the 6-digit OTP code.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await verifyOtp(phone, otpCode, name);
+      setSuccess('Verified successfully! Logging in...');
+      setTimeout(() => router.push('/'), 1200);
+    } catch (err) {
+      setError(err.message || 'Invalid OTP code.');
+    }
+    setLoading(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,6 +120,10 @@ export default function AuthPage() {
         setResetSent(true);
       } else {
         if (isLogin) {
+          if (authMethod === 'otp') {
+            await handleVerifyOtp(e);
+            return;
+          }
           await login(email, password);
         } else {
           if (!name.trim()) {
@@ -69,7 +131,13 @@ export default function AuthPage() {
             setLoading(false);
             return;
           }
-          await signup(email, password, name);
+          const cleanPhone = phone.replace(/\D/g, '');
+          if (phone && cleanPhone.length < 10) {
+            setError('Please enter a valid 10-digit mobile number.');
+            setLoading(false);
+            return;
+          }
+          await signup(email, password, name, phone);
         }
       }
     } catch (err) {
@@ -79,8 +147,6 @@ export default function AuthPage() {
           errorMessage = 'Invalid email or password. Please try again or create an account.';
         } else if (err.message.includes('User already registered')) {
           errorMessage = 'An account with this email already exists.';
-        } else if (err.message.includes('Password should be')) {
-          errorMessage = err.message;
         } else {
           errorMessage = err.message;
         }
@@ -91,7 +157,7 @@ export default function AuthPage() {
     setLoading(false);
   };
 
-  if (user && !isResetMode) return null; // Redirecting
+  if (user && !isResetMode) return null;
 
   return (
     <main className="auth-page-container">
@@ -110,20 +176,64 @@ export default function AuthPage() {
             <div>Crockeries</div>
           </div>
 
-          {/* Render tabs only when NOT in forgot password or reset mode */}
+          {/* Top Auth Mode Tabs (Sign In vs Create Account) */}
           {!isForgotPassword && !isResetMode && (
             <div className="auth-tabs">
               <button 
+                type="button"
                 onClick={() => { setIsLogin(true); setError(''); setSuccess(''); }}
                 className={`auth-tab-btn ${isLogin ? 'active' : ''}`}
               >
                 Sign In
               </button>
               <button 
+                type="button"
                 onClick={() => { setIsLogin(false); setError(''); setSuccess(''); }}
                 className={`auth-tab-btn ${!isLogin ? 'active' : ''}`}
               >
                 Create Account
+              </button>
+            </div>
+          )}
+
+          {/* Sub-toggle for Sign In: Password vs Mobile OTP */}
+          {isLogin && !isForgotPassword && !isResetMode && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', background: 'var(--bg-alt)', padding: '4px', borderRadius: '6px' }}>
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('password'); setError(''); setSuccess(''); }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  background: authMethod === 'password' ? 'var(--dark)' : 'transparent',
+                  color: authMethod === 'password' ? '#FFFFFF' : 'var(--text-muted)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <i className="fa-solid fa-key" style={{ marginRight: '6px' }}></i> Email &amp; Password
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('otp'); setError(''); setSuccess(''); }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  background: authMethod === 'otp' ? 'var(--dark)' : 'transparent',
+                  color: authMethod === 'otp' ? '#FFFFFF' : 'var(--text-muted)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <i className="fa-solid fa-mobile-screen" style={{ marginRight: '6px' }}></i> Mobile OTP
               </button>
             </div>
           )}
@@ -173,7 +283,7 @@ export default function AuthPage() {
               </div>
             ) : (
               <>
-                {/* 1. Full name (only in Sign Up mode) */}
+                {/* 1. Full name (Sign Up mode only) */}
                 {!isLogin && !isForgotPassword && !isResetMode && (
                   <div className="auth-form-group">
                     <label>Full Name</label>
@@ -187,8 +297,8 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {/* 2. Email Address (except in Reset Mode) */}
-                {!isResetMode && (
+                {/* 2. Email Address (Sign Up or Email Password Sign In) */}
+                {!isResetMode && (!isLogin || authMethod === 'password') && (
                   <div className="auth-form-group">
                     <label>Email Address</label>
                     <input 
@@ -201,12 +311,33 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {/* 3. Password Input */}
-                {!isForgotPassword && (
+                {/* 3. Mobile Number Field (Sign Up OR Mobile OTP Sign In) */}
+                {!isForgotPassword && !isResetMode && (!isLogin || authMethod === 'otp') && (
+                  <div className="auth-form-group">
+                    <label>Mobile Number {!isLogin && <span style={{ textTransform: 'none', color: 'var(--primary)' }}>(+91 India)</span>}</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ padding: '0.8rem 0.9rem', background: 'var(--bg-alt)', border: '1px solid var(--border)', borderRadius: '4px', fontWeight: '600', fontSize: '0.9rem', color: 'var(--dark)' }}>
+                        +91
+                      </span>
+                      <input 
+                        type="tel" 
+                        value={phone} 
+                        onChange={(e) => setPhone(e.target.value)} 
+                        required={isLogin && authMethod === 'otp'}
+                        maxLength={14}
+                        placeholder="98765 43210"
+                        style={{ flex: 1 }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Password Input (Password Login or Sign Up) */}
+                {!isForgotPassword && (!isLogin || authMethod === 'password') && (
                   <div className="auth-form-group">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label>{isResetMode ? 'New Password' : 'Password'}</label>
-                      {isLogin && !isResetMode && (
+                      {isLogin && !isResetMode && authMethod === 'password' && (
                         <button 
                           type="button" 
                           onClick={() => { setIsForgotPassword(true); setError(''); setSuccess(''); }}
@@ -220,13 +351,56 @@ export default function AuthPage() {
                       type="password" 
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
-                      required 
+                      required={!isLogin || authMethod === 'password'} 
                       placeholder="••••••••"
                     />
                   </div>
                 )}
 
-                {/* 4. Confirm Password Input (Reset Mode only) */}
+                {/* 5. OTP Code Input & Resend (Mobile OTP Login Mode) */}
+                {isLogin && authMethod === 'otp' && (
+                  <>
+                    {!otpSent ? (
+                      <button 
+                        type="button" 
+                        onClick={handleSendOtp}
+                        disabled={loading || !phone}
+                        className="btn btn-accent"
+                        style={{ width: '100%', padding: '0.9rem', marginTop: '0.5rem', fontSize: '0.9rem' }}
+                      >
+                        {loading ? 'Sending OTP...' : 'SEND OTP VIA SMS'}
+                      </button>
+                    ) : (
+                      <div className="auth-form-group" style={{ marginTop: '0.5rem' }}>
+                        <label>Enter 6-Digit OTP Code</label>
+                        <input 
+                          type="text" 
+                          value={otpCode} 
+                          onChange={(e) => setOtpCode(e.target.value)} 
+                          maxLength={6}
+                          required 
+                          placeholder="Enter 6-digit code (e.g. 123456)"
+                          style={{ letterSpacing: '4px', fontSize: '1.2rem', textAlign: 'center', fontWeight: 'bold' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.6rem', fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Didn\'t receive code?'}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={countdown > 0}
+                            onClick={handleSendOtp}
+                            style={{ background: 'none', border: 'none', color: countdown > 0 ? 'var(--text-muted)' : 'var(--primary)', fontWeight: '600', cursor: countdown > 0 ? 'default' : 'pointer' }}
+                          >
+                            Resend OTP
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* 6. Confirm Password Input (Reset Mode only) */}
                 {isResetMode && (
                   <div className="auth-form-group">
                     <label>Confirm New Password</label>
@@ -240,14 +414,17 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="btn btn-primary"
-                  style={{ width: '100%', padding: '1rem', marginTop: '1rem', fontSize: '1rem', opacity: loading ? 0.7 : 1 }}
-                >
-                  {loading ? 'Processing...' : isResetMode ? 'UPDATE PASSWORD' : isForgotPassword ? 'SEND RESET LINK' : isLogin ? 'SIGN IN' : 'CREATE ACCOUNT'}
-                </button>
+                {/* Main Submit Button (Except when waiting to send OTP) */}
+                {(!isLogin || authMethod === 'password' || otpSent) && (
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '1rem', marginTop: '1rem', fontSize: '1rem', opacity: loading ? 0.7 : 1 }}
+                  >
+                    {loading ? 'Processing...' : isResetMode ? 'UPDATE PASSWORD' : isForgotPassword ? 'SEND RESET LINK' : isLogin ? (authMethod === 'otp' ? 'VERIFY & SIGN IN' : 'SIGN IN') : 'CREATE ACCOUNT'}
+                  </button>
+                )}
 
                 {isForgotPassword && (
                   <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>

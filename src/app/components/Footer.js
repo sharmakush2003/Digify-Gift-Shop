@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Footer() {
@@ -17,9 +18,11 @@ export default function Footer() {
           
           {/* Brand Column */}
           <div className="footer-brand-col">
-            <div className="footer-logo-container">
-              <span className="footer-logo">ORIENT</span>
-              <span className="footer-logo-tagline">Crockeries</span>
+            <div className="footer-logo-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px' }}>
+              <Image src="/images/logo.jpg" alt="Orient Crockeries Logo" width={60} height={60} style={{ objectFit: 'contain' }} />
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="footer-logo" style={{ fontSize: '1.5rem', letterSpacing: '2px', whiteSpace: 'nowrap' }}>Orient Crockeries</span>
+              </div>
             </div>
             <p className="footer-brand-desc">
               Curating and crafting the world&apos;s finest dinnerware, professional cookware, and organic acacia woodcraft for five-star hospitality and exquisite homes since 1994.

@@ -15,10 +15,13 @@ export default function CartPage() {
   
   const router = useRouter();
 
-  // Promo code states
+  // Promo code & Gift Voucher states
   const [promoInput, setPromoInput] = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoApplied, setPromoApplied] = useState("");
+
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherApplied, setVoucherApplied] = useState("");
 
   // Toast Notification State
   const [toastMessage, setToastMessage] = useState("");
@@ -32,7 +35,7 @@ export default function CartPage() {
     }, 3500);
   };
 
-  // Promo code validation via backend API
+  // Promo code / Gift Voucher validation via backend API
   const handleApplyPromo = async (e) => {
     e.preventDefault();
     const code = promoInput.trim().toUpperCase();
@@ -43,16 +46,26 @@ export default function CartPage() {
       const response = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, cartValue: cartSubtotal })
+        body: JSON.stringify({ 
+          code, 
+          cartValue: cartSubtotal,
+          cartItems: cart 
+        })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setPromoDiscount(data.discountAmount);
-        setPromoApplied(data.coupon.code);
+        if (data.coupon.isGiftVoucher) {
+          setVoucherDiscount(data.discountAmount);
+          setVoucherApplied(data.coupon.code);
+          showToast(`🎁 Gift Voucher ${data.coupon.code} applied! (-₹${data.discountAmount})`, "success");
+        } else {
+          setPromoDiscount(data.discountAmount);
+          setPromoApplied(data.coupon.code);
+          showToast(`🎉 Coupon ${data.coupon.code} applied! (-₹${data.discountAmount})`, "success");
+        }
         setPromoInput("");
-        showToast(`🎉 Yay! ${data.coupon.code} applied successfully! 🎈`, "success");
       } else {
         showToast(`❌ ${data.message || "Invalid promotional code."}`, "error");
       }
@@ -62,18 +75,33 @@ export default function CartPage() {
     }
   };
 
+  const removeCoupon = (type) => {
+    if (type === 'promo') {
+      setPromoDiscount(0);
+      setPromoApplied("");
+      showToast("Promo coupon removed", "success");
+    } else {
+      setVoucherDiscount(0);
+      setVoucherApplied("");
+      showToast("Gift voucher removed", "success");
+    }
+  };
+
   // Shipping Fee (Free shipping above ₹999, else ₹99)
   const shippingFee = cartSubtotal >= 999 || cartSubtotal === 0 ? 0 : 99;
 
+  // Total Combined Discount
+  const totalDiscount = promoDiscount + voucherDiscount;
+
   // Final Total
-  const finalTotal = Math.max(0, cartSubtotal - promoDiscount + shippingFee);
+  const finalTotal = Math.max(0, cartSubtotal - totalDiscount + shippingFee);
 
   const handleCheckout = () => {
     // Save checkout calculations to localStorage to pass to checkout page
     localStorage.setItem("orient_checkout_shipping", shippingFee.toString());
     localStorage.setItem("orient_checkout_loyalty_disc", "0");
-    localStorage.setItem("orient_checkout_promo_disc", promoDiscount.toString());
-    localStorage.setItem("orient_checkout_promo_code", promoApplied);
+    localStorage.setItem("orient_checkout_promo_disc", totalDiscount.toString());
+    localStorage.setItem("orient_checkout_promo_code", promoApplied ? (voucherApplied ? `${promoApplied}, ${voucherApplied}` : promoApplied) : voucherApplied);
     localStorage.setItem("orient_checkout_total", finalTotal.toString());
     
     router.push("/checkout");
@@ -135,67 +163,61 @@ export default function CartPage() {
               <span>₹{cartSubtotal.toFixed(2)}</span>
             </div>
 
-            {/* Promo Codes */}
+            {/* Promo & Gift Voucher Input Form */}
             <div style={{ marginBottom: "1.5rem", marginTop: "1.5rem" }}>
               <form onSubmit={handleApplyPromo} className="loyalty-form">
                 <input 
                   type="text" 
                   className="loyalty-input" 
-                  placeholder="Enter Promo Code (e.g. WELCOME10)" 
+                  placeholder="Enter Promo Code or Gift Voucher" 
                   value={promoInput}
                   onChange={(e) => setPromoInput(e.target.value)}
                 />
                 <button type="submit" className="btn btn-outline btn-sm">Apply</button>
               </form>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "10px" }}>
-                  Enter a valid coupon code to get a discount.
-                </p>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "8px" }}>
+                Enter promo coupon or stackable gift voucher code.
+              </p>
             </div>
 
             {/* Calculations Breakdown */}
-            {promoDiscount > 0 && (
+            {promoApplied && (
               <div className="summary-row" style={{ color: "var(--success)" }}>
-                <span>Promo Code ({promoApplied})</span>
+                <span>Coupon ({promoApplied}) <button onClick={() => removeCoupon('promo')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem' }}>(Remove)</button></span>
                 <span>-₹{promoDiscount.toFixed(2)}</span>
               </div>
             )}
 
+            {voucherApplied && (
+              <div className="summary-row" style={{ color: "#d97706" }}>
+                <span>Gift Voucher ({voucherApplied}) <button onClick={() => removeCoupon('voucher')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem' }}>(Remove)</button></span>
+                <span>-₹{voucherDiscount.toFixed(2)}</span>
+              </div>
+            )}
+
             <div className="summary-row">
-              <span>Standard Shipping</span>
-              <span>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</span>
+              <span>Shipping Fee</span>
+              <span>{shippingFee === 0 ? <span style={{ color: "var(--success)" }}>FREE</span> : `₹${shippingFee.toFixed(2)}`}</span>
             </div>
 
-            <div className="summary-row total">
-              <span>Order Total</span>
+            <div className="summary-row total-row">
+              <span>Estimated Total</span>
               <span>₹{finalTotal.toFixed(2)}</span>
             </div>
 
-            <button 
-              className="btn btn-primary btn-full" 
-              style={{ marginTop: "1.5rem" }}
-              onClick={handleCheckout}
-            >
-              Secure Checkout
+            <button className="btn btn-primary btn-full" onClick={handleCheckout}>
+              Proceed to Checkout &rarr;
             </button>
-
-            <div style={{ textAlign: "center", marginTop: "1rem" }}>
-              <Link href="/catalog" style={{ fontSize: "0.8rem", textDecoration: "underline", color: "var(--text-muted)" }}>
-                Continue Shopping
-              </Link>
-            </div>
           </aside>
         </div>
       )}
-      
+
       {/* Floating Toast Notification */}
-      <div className={`toast ${toastType === 'success' ? 'toast-success' : 'toast-error'} ${toastMessage ? "show" : ""}`}>
-        {toastType === 'success' ? (
-          <i className="fa-solid fa-gift" style={{ color: "var(--primary)", fontSize: "1.2rem" }}></i>
-        ) : (
-          <i className="fa-solid fa-circle-exclamation" style={{ color: "var(--error)", fontSize: "1.2rem" }}></i>
-        )}
-        <span>{toastMessage}</span>
-      </div>
+      {toastMessage && (
+        <div className={`toast toast-${toastType} show`}>
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

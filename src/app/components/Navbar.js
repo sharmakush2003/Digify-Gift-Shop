@@ -1,16 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const { cartItemCount, wishlist } = useApp();
-  const { user, setShowLoginModal } = useAuth();
+  const { user } = useAuth();
   const [mobileActive, setMobileActive] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const { logout } = useAuth();
 
   useEffect(() => {
@@ -25,16 +27,49 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Close mobile menu automatically whenever route changes
+  useEffect(() => {
+    setMobileActive(false);
+  }, [pathname]);
+
+  // Close mobile menu on window resize above 1024px or ESC key press
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1024) {
+        setMobileActive(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setMobileActive(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery'))) {
     return null;
   }
 
+  const closeDrawer = () => {
+    setMobileActive(false);
+  };
+
   return (
     <>
-
+      {/* Mobile Nav Overlay Backdrop */}
+      <div 
+        className={`nav-backdrop ${mobileActive ? 'active' : ''}`} 
+        onClick={closeDrawer}
+      />
 
       <nav className={`${scrolled ? 'nav-scrolled' : ''}`}>
-        {/* Hamburger Menu Toggle (Mobile) */}
+        {/* Hamburger Menu Toggle (Mobile & Tablet) */}
         <button 
           className="menu-trigger mobile-only-btn" 
           onClick={() => setMobileActive(true)}
@@ -48,21 +83,25 @@ export default function Navbar() {
         </button>
 
         {/* Logo Branding */}
-        <Link href="/" className="logo-container">
-          <span className="logo">ORIENT</span>
-          <span className="logo-tagline">Crockeries</span>
+        <Link href="/" className="logo-container" onClick={closeDrawer}>
+          <Image src="/images/logo.jpg" alt="Orient Crockeries" width={42} height={42} style={{ objectFit: 'contain' }} priority />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="logo">Orient Crockeries</span>
+          </div>
         </Link>
 
         {/* Navigation Links */}
         <ul className={`nav-links ${mobileActive ? 'active' : ''}`} id="nav-links-menu">
           <li className="nav-mobile-only menu-header-container">
-            <div className="logo-container">
-              <span className="logo">ORIENT</span>
-              <span className="logo-tagline">Crockeries</span>
+            <div className="logo-container" style={{ gap: '10px' }}>
+              <Image src="/images/logo.jpg" alt="Orient Crockeries" width={35} height={35} style={{ objectFit: 'contain' }} />
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="logo" style={{ fontSize: '1.2rem', letterSpacing: '2px', whiteSpace: 'nowrap' }}>Orient Crockeries</span>
+              </div>
             </div>
             <button 
               className="menu-close-x-btn" 
-              onClick={() => setMobileActive(false)}
+              onClick={closeDrawer}
               aria-label="Close menu"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -72,31 +111,28 @@ export default function Navbar() {
             </button>
           </li>
           
-          <li><Link href="/" onClick={() => setMobileActive(false)}>Home</Link></li>
-          <li><Link href="/catalog" onClick={() => setMobileActive(false)}>Shop Dining</Link></li>
-          <li><Link href="/about" onClick={() => setMobileActive(false)}>Our Story</Link></li>
-          <li><Link href="/care" onClick={() => setMobileActive(false)}>Care Guide</Link></li>
-          <li><Link href="/delivery" onClick={() => setMobileActive(false)}>Delivery & Shipping</Link></li>
-          <li><Link href="/contact" onClick={() => setMobileActive(false)}>Contact</Link></li>
-          <li style={{ display: 'flex', gap: '10px' }}>
+          <li><Link href="/" onClick={closeDrawer}>Home</Link></li>
+          <li><Link href="/catalog" onClick={closeDrawer}>Shop Dining</Link></li>
+          <li><Link href="/contact" onClick={closeDrawer}>Contact</Link></li>
+          <li>
             {user ? (
-              <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Link 
                   href="/account"
                   className="nav-link-btn" 
-                  onClick={() => setMobileActive(false)}
+                  onClick={closeDrawer}
                 >
                   My Account
                 </Link>
                 <button 
-                  onClick={() => { logout(); setMobileActive(false); }}
+                  onClick={() => { logout(); closeDrawer(); router.push('/'); }}
                   style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '600', fontSize: '0.8rem', letterSpacing: '2px', cursor: 'pointer', textTransform: 'uppercase' }}
                 >
                   LOGOUT
                 </button>
-              </>
+              </div>
             ) : (
-              <Link href="/auth" className="nav-link-btn" onClick={() => setMobileActive(false)}>
+              <Link href="/auth" className="nav-link-btn" onClick={closeDrawer}>
                 Sign In / Sign Up
               </Link>
             )}
@@ -104,7 +140,7 @@ export default function Navbar() {
         </ul>
 
         {/* Header Icons / Action Buttons */}
-        <div className="nav-icons">
+        <div className="nav-icons" style={{ gap: '0.8rem' }}>
 
           {/* Wishlist Link */}
           <Link href="/catalog?wishlist=true" className="nav-icon-btn" title="Wishlist">

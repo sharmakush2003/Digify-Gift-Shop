@@ -104,21 +104,27 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase.from('orders').select('*');
       if (error) throw error;
-      let ordersData = data ? data.map(dbOrder => ({
-        id: dbOrder.order_number || dbOrder.id,
-        _docId: dbOrder.id,
-        date: dbOrder.created_at,
-        customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
-        customerPhone: dbOrder.guest_phone || 'N/A',
-        shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
-        items: [], // Will require order_items join later, stub for now
-        subtotal: dbOrder.total_mrp || 0,
-        shipping: dbOrder.shipping_charge || 0,
-        discount: dbOrder.discount_amount || 0,
-        total: dbOrder.final_total || 0,
-        status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
-        courierStatus: 'In Warehouse'
-      })) : [];
+      let ordersData = data ? data.map(dbOrder => {
+        const nameFromAddr = typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : null;
+        const custName = nameFromAddr || dbOrder.customer_name || dbOrder.name || (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer');
+        const custPhone = dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : null) || dbOrder.phone || 'N/A';
+
+        return {
+          id: dbOrder.order_number || dbOrder.id,
+          _docId: dbOrder.id,
+          date: dbOrder.created_at,
+          customerName: custName,
+          customerPhone: custPhone,
+          shippingAddress: dbOrder.shipping_address?.raw_text || (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
+          items: [],
+          subtotal: dbOrder.total_mrp || 0,
+          shipping: dbOrder.shipping_charge || 0,
+          discount: dbOrder.discount_amount || 0,
+          total: dbOrder.final_total || 0,
+          status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
+          courierStatus: 'In Warehouse'
+        };
+      }) : [];
       
       // Merge with local storage orders so recent tests aren't lost
       const localOrders = getOrders();
@@ -335,8 +341,15 @@ export default function AdminPage() {
   };
 
   // Metric computations
-  const totalRevenue = ordersList.reduce((sum, o) => sum + o.total, 0);
-  const pendingOrdersCount = ordersList.filter(o => o.status !== "Delivered").length;
+  const allTimeRevenue = ordersList.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  
+  const todayStr = new Date().toDateString();
+  const todayOrders = ordersList.filter(o => o.date && new Date(o.date).toDateString() === todayStr);
+  const todayRevenue = todayOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  
+  const totalOrdersCount = ordersList.length;
+  const activeOrdersCount = ordersList.filter(o => o.status !== "Delivered").length;
+  const pendingOrdersCount = ordersList.filter(o => o.status === "Pending").length;
   const lowStockCount = productsList.filter(p => p.stock < 5).length;
 
   // Cutoff date for recent orders (48 hours ago)
@@ -367,7 +380,7 @@ export default function AdminPage() {
       return;
     }
 
-    const headers = ["Order ID", "Customer Name", "Date", "Invoice Total", "Status", "Courier Status"];
+    const headers = ["Order ID", "Customer Name", "Mobile Number", "Date", "Invoice Total", "Status", "Courier Status"];
     const csvRows = [];
     csvRows.push(headers.join(","));
 
@@ -375,6 +388,7 @@ export default function AdminPage() {
       const row = [
         order.id,
         `"${order.customerName}"`,
+        `"${order.customerPhone}"`,
         `"${new Date(order.date).toLocaleString()}"`,
         order.total,
         order.status,
@@ -940,21 +954,77 @@ export default function AdminPage() {
         </div>
 
         {/* Metric widgets grid */}
-        <div className="erp-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
-          <div className="metric-card">
-            <span className="card-title">Consolidated Revenue</span>
-            <h3>₹{totalRevenue.toLocaleString("en-IN")}</h3>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Total cash volume cleared</p>
+        <div className="erp-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginTop: "1.5rem" }}>
+          {/* Card 1: All-Time Revenue */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">All-Time Revenue</span>
+              <div className="metric-icon-avatar gold">
+                <i className="fa-solid fa-wallet"></i>
+              </div>
+            </div>
+            <div className="metric-card-value">₹{allTimeRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="metric-card-subtext">Cumulative cleared store sales</div>
           </div>
-          <div className="metric-card">
-            <span className="card-title">Active Orders</span>
-            <h3>{pendingOrdersCount}</h3>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Awaiting packing &amp; dispatch</p>
+
+          {/* Card 2: Today's Revenue */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">Today's Revenue</span>
+              <div className="metric-icon-avatar green">
+                <i className="fa-solid fa-chart-line"></i>
+              </div>
+            </div>
+            <div className="metric-card-value">₹{todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="metric-card-subtext">{todayOrders.length} {todayOrders.length === 1 ? 'order' : 'orders'} placed today</div>
           </div>
-          <div className="metric-card">
-            <span className="card-title">Low Stock Items</span>
-            <h3 style={{ color: lowStockCount > 0 ? "var(--error)" : "inherit" }}>{lowStockCount}</h3>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Stock units below 5</p>
+
+          {/* Card 3: Total Orders Till Today */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">Total Orders</span>
+              <div className="metric-icon-avatar blue">
+                <i className="fa-solid fa-boxes-stacked"></i>
+              </div>
+            </div>
+            <div className="metric-card-value">{totalOrdersCount}</div>
+            <div className="metric-card-subtext">Lifetime customer transactions</div>
+          </div>
+
+          {/* Card 4: Active Orders */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">Active Dispatches</span>
+              <div className="metric-icon-avatar indigo">
+                <i className="fa-solid fa-truck-fast"></i>
+              </div>
+            </div>
+            <div className="metric-card-value">{activeOrdersCount}</div>
+            <div className="metric-card-subtext">In packing &amp; dispatch queue</div>
+          </div>
+
+          {/* Card 5: Pending Orders */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">Pending Orders</span>
+              <div className="metric-icon-avatar amber">
+                <i className="fa-solid fa-clock-rotate-left"></i>
+              </div>
+            </div>
+            <div className="metric-card-value">{pendingOrdersCount}</div>
+            <div className="metric-card-subtext">Awaiting admin processing</div>
+          </div>
+
+          {/* Card 6: Low Stock Items */}
+          <div className="metric-card-pro">
+            <div className="metric-card-header">
+              <span className="metric-card-title">Low Stock Alert</span>
+              <div className={`metric-icon-avatar ${lowStockCount > 0 ? 'red' : 'green'}`}>
+                <i className="fa-solid fa-triangle-exclamation"></i>
+              </div>
+            </div>
+            <div className="metric-card-value" style={{ color: lowStockCount > 0 ? "#dc2626" : "inherit" }}>{lowStockCount}</div>
+            <div className="metric-card-subtext">Products below 5 units stock</div>
           </div>
         </div>
       </div>
@@ -1056,7 +1126,21 @@ export default function AdminPage() {
                     filteredOrders.map(order => (
                       <tr key={order.id}>
                         <td style={{ fontWeight: "700" }}>{order.id}</td>
-                        <td style={{ fontWeight: "600" }}>{order.customerName}</td>
+                        <td style={{ fontWeight: "600" }}>
+                          <div style={{ color: "#0f172a", fontSize: "0.9rem", fontWeight: "700" }}>{order.customerName}</div>
+                          {order.customerPhone && order.customerPhone !== 'N/A' ? (
+                            <a 
+                              href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`} 
+                              className="phone-call-link"
+                              title="Click to Call Customer"
+                            >
+                              <i className="fa-solid fa-phone"></i>
+                              <span>{order.customerPhone}</span>
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>No Phone</span>
+                          )}
+                        </td>
                         <td>{new Date(order.date).toLocaleString("en-IN", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                         <td>₹{order.total.toFixed(2)}</td>
                         <td>

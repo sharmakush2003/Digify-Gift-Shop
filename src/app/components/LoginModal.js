@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginModal() {
@@ -16,7 +17,10 @@ export default function LoginModal() {
       <div className="alert-overlay">
         <div className="alert-box">
           <div className="alert-header">
-            <h3>Orient Crockeries</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Image src="/images/logo.jpg" alt="Orient Crockeries Logo" width={30} height={30} style={{ objectFit: 'contain' }} />
+              Orient Crockeries
+            </h3>
           </div>
           <div className="alert-body">
             <p>{alertMessage}</p>
@@ -128,7 +132,10 @@ export default function LoginModal() {
           &times;
         </button>
         
-        <h2>{user ? 'My Account' : (isLogin ? 'Welcome Back' : 'Create Account')}</h2>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+          <Image src="/images/logo.jpg" alt="Orient Crockeries Logo" width={100} height={40} style={{ objectFit: 'contain' }} />
+        </div>
+        <h2 style={{ textAlign: 'center', marginTop: 0 }}>{user ? 'My Account' : (isLogin ? 'Welcome Back' : 'Create Account')}</h2>
         
         {user ? (
           <div className="auth-user-info" style={{ textAlign: 'left', marginTop: '1rem', marginBottom: '1.5rem' }}>
