@@ -135,6 +135,10 @@ export default function AdminPage() {
         ordersData = [...ordersData, ...missingLocalOrders];
       }
 
+      if (!ordersData || ordersData.length === 0) {
+        ordersData = getOrders();
+      }
+
       ordersData.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
       setOrdersList(ordersData);
     } catch (e) {

@@ -32,7 +32,7 @@ export const updateProduct = (id, updatedProduct) => {
   return null;
 };
 
-const INITIAL_DEMO_ORDERS = [
+export const INITIAL_DEMO_ORDERS = [
   {
     id: "ORD-882193",
     date: new Date(Date.now() - 3600000 * 2).toISOString(),
@@ -162,7 +162,17 @@ export const getOrders = () => {
     localStorage.setItem('orient_orders', JSON.stringify(INITIAL_DEMO_ORDERS));
     return INITIAL_DEMO_ORDERS;
   }
-  return JSON.parse(data);
+  try {
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem('orient_orders', JSON.stringify(INITIAL_DEMO_ORDERS));
+      return INITIAL_DEMO_ORDERS;
+    }
+    return parsed;
+  } catch (e) {
+    localStorage.setItem('orient_orders', JSON.stringify(INITIAL_DEMO_ORDERS));
+    return INITIAL_DEMO_ORDERS;
+  }
 };
 
 export const saveOrder = (order) => {
