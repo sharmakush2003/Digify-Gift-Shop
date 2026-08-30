@@ -128,10 +128,11 @@ export default function CartPage() {
                 <img src={item.image} alt={item.name} className="cart-item-img" />
                 <div>
                   <h3 className="cart-item-name">{item.name}</h3>
-                  <div className="cart-item-meta">
-                    <span>Barcode: {item.barcode} | HSN: {item.hsn}</span>
-                    {item.fragile && <span style={{ color: "var(--primary)", marginLeft: "10px" }}><i className="fa-solid fa-triangle-exclamation"></i> Fragile</span>}
-                  </div>
+                  {item.fragile && (
+                    <div className="cart-item-meta">
+                      <span style={{ color: "var(--primary)" }}><i className="fa-solid fa-triangle-exclamation"></i> Fragile Item</span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Quantity Editor */}

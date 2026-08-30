@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getOrders } from "../db";
+import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import Link from "next/link";
 
 function TrackingContent() {
@@ -142,9 +143,16 @@ function TrackingContent() {
               {activeOrder.customerName}<br />
               {activeOrder.shippingAddress}
             </p>
-            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "space-between", color: "var(--text-muted)" }}>
+            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", color: "var(--text-muted)" }}>
               <span>Total Paid: <b>₹{activeOrder.total.toFixed(2)}</b></span>
-              <span>Payment: <b>{activeOrder.paymentStatus} ({activeOrder.paymentId})</b></span>
+              <button 
+                type="button" 
+                onClick={() => generateInvoicePDF(activeOrder)}
+                className="btn btn-outline btn-sm"
+                style={{ borderColor: "var(--primary)", color: "var(--primary)", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <i className="fa-solid fa-file-pdf"></i> Download Official Tax Invoice (PDF)
+              </button>
             </div>
           </div>
         </div>

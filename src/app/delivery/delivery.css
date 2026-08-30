@@ -1,0 +1,506 @@
+/* Delivery Portal Styling - Mobile First */
+.delivery-container {
+  max-width: 600px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: #F8F9FD;
+  font-family: 'Montserrat', sans-serif;
+  color: #2D3748;
+  padding: 15px 15px 80px 15px;
+}
+
+/* Lock Screen - Luxury Themed */
+.lock-screen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, #1b1c2b 0%, #0d0e17 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.lock-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(197, 160, 89, 0.25); /* Gold outline */
+  padding: 50px 35px;
+  border-radius: 28px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(197, 160, 89, 0.05);
+  animation: lockCardEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.lock-icon-header {
+  width: 65px;
+  height: 65px;
+  background: rgba(197, 160, 89, 0.1);
+  border: 1px solid rgba(197, 160, 89, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 25px;
+  color: #C5A059;
+  font-size: 1.5rem;
+  box-shadow: 0 0 20px rgba(197, 160, 89, 0.15);
+}
+
+.lock-logo {
+  font-family: 'Outfit', sans-serif;
+  color: #FFFFFF;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.lock-subtitle {
+  color: #8A98A8;
+  font-size: 0.8rem;
+  margin-bottom: 35px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+.lock-pin-input {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 1.6rem;
+  color: #FFFFFF;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 12px;
+  margin-bottom: 25px;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: monospace;
+}
+
+.lock-pin-input:focus {
+  border-color: #C5A059;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 25px rgba(197, 160, 89, 0.25);
+}
+
+.lock-btn {
+  background: linear-gradient(135deg, #C5A059 0%, #A37F3D 100%);
+  color: #000000;
+  font-weight: 700;
+  border: none;
+  padding: 16px;
+  width: 100%;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 10px 25px rgba(197, 160, 89, 0.2);
+}
+
+.lock-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 30px rgba(197, 160, 89, 0.3);
+  filter: brightness(1.15);
+}
+
+.lock-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes lockCardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-text {
+  color: #E53E3E;
+  font-size: 0.85rem;
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+/* Header */
+.delivery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: #fff;
+  padding: 18px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+}
+
+.delivery-brand h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1A202C;
+  margin: 0;
+}
+
+.delivery-brand p {
+  font-size: 0.75rem;
+  color: #718096;
+  margin: 2px 0 0 0;
+  font-weight: 600;
+}
+
+.logout-icon-btn {
+  background: #FFF5F5;
+  color: #E53E3E;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-icon-btn:hover {
+  background: #FED7D7;
+}
+
+/* Metrics Grid */
+.delivery-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.delivery-metric-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: #718096;
+  font-weight: 600;
+}
+
+.metric-val {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #2D3748;
+  margin: 5px 0;
+}
+
+.metric-desc {
+  font-size: 0.65rem;
+  color: #A0AEC0;
+}
+
+/* Tabs list */
+.delivery-tabs {
+  display: flex;
+  background: #E2E8F0;
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.delivery-tab-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #4A5568;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delivery-tab-btn.active {
+  background: #fff;
+  color: #1A202C;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Delivery Cards */
+.delivery-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.delivery-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px dashed #EDF2F7;
+  padding-bottom: 12px;
+  margin-bottom: 15px;
+}
+
+.order-id-label {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #2D3748;
+}
+
+.order-date-label {
+  font-size: 0.75rem;
+  color: #A0AEC0;
+  display: block;
+  margin-top: 2px;
+}
+
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.status-badge.packed {
+  background: #FEFCBF;
+  color: #B7791F;
+}
+
+.status-badge.shipped {
+  background: #EBF8FF;
+  color: #2B6CB0;
+}
+
+.status-badge.delivered {
+  background: #C6F6D5;
+  color: #22543D;
+}
+
+.customer-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.customer-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1A202C;
+}
+
+.call-btn {
+  background: #E2E8F0;
+  color: #4A5568;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.call-btn:hover {
+  background: #CBD5E0;
+}
+
+.address-box {
+  background: #F7FAFC;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #4A5568;
+  margin-bottom: 15px;
+  border: 1px solid #EDF2F7;
+}
+
+.map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #3182CE;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 5px;
+  cursor: pointer;
+}
+
+.map-btn:hover {
+  text-decoration: underline;
+}
+
+/* COD Alert Banner */
+.cod-banner {
+  border-radius: 12px;
+  padding: 12px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+}
+
+.cod-banner.cod {
+  background: #FFF5F5;
+  border: 1px solid #FED7D7;
+  color: #9B2C2C;
+}
+
+.cod-banner.prepaid {
+  background: #F0FFF4;
+  border: 1px solid #C6F6D5;
+  color: #22543D;
+}
+
+.cod-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.cod-amount {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+/* Items List details */
+.items-summary-toggle {
+  font-size: 0.75rem;
+  color: #718096;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.items-list {
+  background: #F7FAFC;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 15px;
+  font-size: 0.8rem;
+  border: 1px solid #EDF2F7;
+}
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.item-row:last-child {
+  margin-bottom: 0;
+}
+
+.item-qty {
+  font-weight: 700;
+  color: #718096;
+  margin-right: 5px;
+}
+
+.item-name {
+  color: #4A5568;
+}
+
+/* Button Actions */
+.action-row {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn-primary {
+  flex: 1;
+  background: #C5A059;
+  color: #000;
+  font-weight: 700;
+  border: none;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-btn-primary:hover {
+  background: #d4b270;
+}
+
+.action-btn-secondary {
+  flex: 1;
+  background: #fff;
+  color: #4A5568;
+  border: 1px solid #CBD5E0;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-btn-secondary:hover {
+  background: #F7FAFC;
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

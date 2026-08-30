@@ -1040,3 +1040,106 @@
   }
 }
 
+/* =============================================
+   ENHANCED MODAL & HIGH-VISIBILITY FORM STYLES
+   ============================================= */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: #FFFFFF !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #E2E8F0 !important;
+}
+
+.modal-card .form-label,
+.modal-card .modal-meta-label,
+.form-label,
+.modal-meta-label {
+  display: block;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: #475569 !important;
+  margin-bottom: 6px !important;
+}
+
+.modal-card input:not([type="checkbox"]):not([type="radio"]),
+.modal-card select,
+.modal-card textarea,
+.modal-card .form-input,
+.modal-card .sort-select,
+.form-input,
+.sort-select {
+  width: 100% !important;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  background-color: #F8FAFC !important;
+  border: 1.5px solid #CBD5E1 !important;
+  color: #0F172A !important;
+  font-size: 0.92rem !important;
+  font-weight: 500 !important;
+  outline: none !important;
+  transition: all 0.2s ease-in-out !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.modal-card input:not([type="checkbox"]):not([type="radio"])::placeholder,
+.modal-card select::placeholder,
+.modal-card textarea::placeholder,
+.form-input::placeholder {
+  color: #94A3B8 !important;
+  font-weight: 400 !important;
+}
+
+.modal-card input:not([type="checkbox"]):not([type="radio"]):focus,
+.modal-card select:focus,
+.modal-card textarea:focus,
+.modal-card .form-input:focus,
+.modal-card .sort-select:focus,
+.form-input:focus,
+.sort-select:focus {
+  border-color: var(--primary) !important;
+  background-color: #FFFFFF !important;
+  box-shadow: 0 0 0 3.5px rgba(67, 24, 255, 0.15) !important;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.form-group.full-width {
+  grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group.full-width {
+    grid-column: span 1;
+  }
+}
+
+

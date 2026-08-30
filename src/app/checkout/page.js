@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "../context/AppContext";
 import { saveOrder } from "../db";
+import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import Link from "next/link";
 import Script from "next/script";
 
@@ -696,6 +697,23 @@ export default function CheckoutPage() {
           </div>
 
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <button 
+              type="button"
+              onClick={() => generateInvoicePDF(createdOrder)}
+              className="btn"
+              style={{
+                backgroundColor: "var(--primary)",
+                color: "white",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "0.8rem 1.6rem",
+                borderRadius: "6px",
+                fontWeight: "600"
+              }}
+            >
+              <i className="fa-solid fa-file-pdf"></i> Download Official Tax Invoice (PDF)
+            </button>
             <Link 
               href="/account" 
               className="btn btn-outline"
@@ -704,7 +722,7 @@ export default function CheckoutPage() {
             </Link>
             <Link 
               href="/" 
-              className="btn btn-primary"
+              className="btn btn-outline"
             >
               Continue Shopping
             </Link>

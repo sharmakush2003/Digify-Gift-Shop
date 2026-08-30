@@ -5,6 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { useApp } from "./context/AppContext";
 
+const getValidImageUrl = (src) => {
+  if (!src || typeof src !== 'string') return "/images/acacia_wood_casserole.png";
+  const trimmed = src.trim();
+  if (!trimmed) return "/images/acacia_wood_casserole.png";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("/")) {
+    return trimmed;
+  }
+  return `/${trimmed}`;
+};
+
 export default function Home() {
   const { products, addToCart, wishlist, toggleWishlist, isInWishlist } = useApp();
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -306,7 +316,7 @@ export default function Home() {
                   {(product.stock <= 0 || product.stockStatus === 'Out of Stock') && <span className="product-badge out-stock">Out of Stock</span>}
                   {product.rating >= 4.9 && product.stock > 30 && product.stockStatus !== 'Out of Stock' && <span className="product-badge">Best Seller</span>}
                   <Image 
-                    src={product.image} 
+                    src={getValidImageUrl(product.image)} 
                     alt={product.name} 
                     fill 
                     sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"

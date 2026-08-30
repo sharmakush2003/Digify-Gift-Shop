@@ -6,6 +6,16 @@ import { useApp } from "../context/AppContext";
 import Link from "next/link";
 import Image from "next/image";
 
+const getValidImageUrl = (src) => {
+  if (!src || typeof src !== 'string') return "/images/acacia_wood_casserole.png";
+  const trimmed = src.trim();
+  if (!trimmed) return "/images/acacia_wood_casserole.png";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("/")) {
+    return trimmed;
+  }
+  return `/${trimmed}`;
+};
+
 function CatalogContent() {
   const { products, addToCart, wishlist, toggleWishlist, isInWishlist } = useApp();
   const searchParams = useSearchParams();
@@ -227,7 +237,7 @@ function CatalogContent() {
             <input 
               type="text" 
               className="search-input" 
-              placeholder="Search by product name, category, or barcode..."
+              placeholder="Search by product name, department, or category..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -286,7 +296,7 @@ function CatalogContent() {
                       {(product.stock <= 0 || product.stockStatus === 'Out of Stock') && <span className="product-badge out-stock">Out of Stock</span>}
                       {product.rating >= 4.9 && product.stock > 30 && product.stockStatus !== 'Out of Stock' && <span className="product-badge">Premium Selection</span>}
                       <Image 
-                        src={product.image} 
+                        src={getValidImageUrl(product.image)} 
                         alt={product.name} 
                         fill 
                         sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
@@ -340,7 +350,7 @@ function CatalogContent() {
             <div className="modal-img-side">
               <div style={{ position: 'relative', width: '100%', height: '350px', flex: 1, minHeight: '300px' }}>
                 <Image 
-                  src={activeImage || selectedProduct.image} 
+                  src={getValidImageUrl(activeImage || selectedProduct.image)} 
                   alt={selectedProduct.name} 
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
@@ -353,7 +363,7 @@ function CatalogContent() {
                   {selectedProduct.images.map((img, idx) => (
                     <Image 
                       key={idx} 
-                      src={img} 
+                      src={getValidImageUrl(img)} 
                       alt={`${selectedProduct.name} - view ${idx + 1}`} 
                       width={55}
                       height={55}

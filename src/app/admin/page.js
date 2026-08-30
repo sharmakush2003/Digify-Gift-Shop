@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   fetchProducts,
   updateOrderStatus,
@@ -9,6 +9,7 @@ import {
 import { supabase } from "../../supabase";
 import CouponsTab from "./CouponsTab";
 import InstructionsTab from "./InstructionsTab";
+import PromoPopupTab from "./PromoPopupTab";
 import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
@@ -35,6 +36,8 @@ export default function AdminPage() {
   // Data states (locally stored)
   const [productsList, setProductsList] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
+  const prevOrdersCountRef = useRef(null);
+  const lastChimedOrderIdRef = useRef(null);
 
   // Editing modals states
   const [editingProduct, setEditingProduct] = useState(null);
@@ -46,9 +49,48 @@ export default function AdminPage() {
   const [newComboPrice, setNewComboPrice] = useState("");
   const [newComboStock, setNewComboStock] = useState("");
   const [newComboImage, setNewComboImage] = useState("");
-  const [newComboDept, setNewComboDept] = useState("Crockery & Dining");
-  const [newComboCat, setNewComboCat] = useState("Dinnerware");
-  const [newComboSub, setNewComboSub] = useState("Dinner Sets");
+  const [newComboDept, setNewComboDept] = useState("Gifting");
+  const [newComboCat, setNewComboCat] = useState("Gift Hampers");
+  const [newComboSub, setNewComboSub] = useState("Combos");
+  const [comboSelectedProducts, setComboSelectedProducts] = useState([
+    { id: 1, productId: "", quantity: 1 },
+    { id: 2, productId: "", quantity: 1 }
+  ]);
+
+  const handleAddComboRow = () => {
+    setComboSelectedProducts(prev => [
+      ...prev,
+      { id: Date.now() + Math.random(), productId: "", quantity: 1 }
+    ]);
+  };
+
+  const handleRemoveComboRow = (id) => {
+    if (comboSelectedProducts.length <= 1) {
+      alert("At least one product must be included in the hamper!");
+      return;
+    }
+    setComboSelectedProducts(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleComboProductChange = (id, productId) => {
+    setComboSelectedProducts(prev =>
+      prev.map(item => item.id === id ? { ...item, productId } : item)
+    );
+  };
+
+  const handleComboQuantityChange = (id, quantity) => {
+    const qty = Math.max(1, parseInt(quantity) || 1);
+    setComboSelectedProducts(prev =>
+      prev.map(item => item.id === id ? { ...item, quantity: qty } : item)
+    );
+  };
+
+  // Calculate base price total of all selected items
+  const comboBasePrice = comboSelectedProducts.reduce((sum, item) => {
+    const prod = productsList.find(p => String(p.id) === String(item.productId));
+    return sum + (prod ? (parseFloat(prod.price) || 0) * item.quantity : 0);
+  }, 0);
+
 
   // New Review manual input states
   const [newReviewAuthor, setNewReviewAuthor] = useState("");
@@ -140,10 +182,51 @@ export default function AdminPage() {
       }
 
       ordersData.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+      
+      // Auto-trigger sound chime & toast popup if a new order was created recently (within last 3 minutes)
+      const newestOrder = ordersData[0];
+      if (newestOrder && newestOrder.date) {
+        const orderTime = new Date(newestOrder.date).getTime();
+        const THREE_MINUTES = 3 * 60 * 1000;
+        if (Date.now() - orderTime < THREE_MINUTES && lastChimedOrderIdRef.current !== newestOrder.id) {
+          lastChimedOrderIdRef.current = newestOrder.id;
+          triggerToast(`🛎️ New Order Received! (${newestOrder.id} - ${newestOrder.customerName || 'Customer'})`);
+          playOrderChime();
+        }
+      }
+      prevOrdersCountRef.current = ordersData.length;
+
       setOrdersList(ordersData);
     } catch (e) {
       console.warn("Failed to load orders from Supabase", e);
       setOrdersList(getOrders()); // Fallback
+    }
+  };
+
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const playOrderChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      }
+    } catch (e) {
+      console.log("Audio notification trigger", e);
     }
   };
 
@@ -166,8 +249,29 @@ export default function AdminPage() {
       }
     }
     loadDbData();
-    
-    return () => window.removeEventListener('resize', handleResize);
+
+    // 1. Ultra-Light Auto-Refresh (Polling every 2 minutes as requested)
+    const pollInterval = setInterval(() => {
+      loadDbData();
+    }, 120000);
+
+    // 2. Supabase Realtime WebSockets for instant updates (<100ms)
+    const channel = supabase
+      .channel('realtime-orders-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+        loadDbData();
+        if (payload.eventType === 'INSERT') {
+          triggerToast("🛎️ New Order Received!");
+          playOrderChime();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const triggerToast = (msg) => {
@@ -341,7 +445,18 @@ export default function AdminPage() {
       updateOrderStatus(orderId, nextStatus); // Fallback
     }
     loadDbData();
-    triggerToast(`Order ${orderId} marked as ${nextStatus}`);
+    
+    // Play sound chime and trigger custom milestone toast
+    playOrderChime();
+    if (nextStatus === "Packed") {
+      triggerToast(`📦 Order ${orderId} Packed Successfully! Item wrapped & ready in Warehouse.`);
+    } else if (nextStatus === "Shipped") {
+      triggerToast(`🚚 Order ${orderId} Dispatched via BlueDart Courier! OTP: ${otpGenerated || "Generated"}`);
+    } else if (nextStatus === "Delivered") {
+      triggerToast(`🎉 Order ${orderId} Delivered Successfully! Customer receipt signed.`);
+    } else {
+      triggerToast(`Order ${orderId} status updated to ${nextStatus}`);
+    }
   };
 
   // Metric computations
@@ -360,17 +475,20 @@ export default function AdminPage() {
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
   const cutoffDate = new Date(Date.now() - TWO_DAYS_MS);
 
-  // Filters for order listing (Only last 2 days)
+  // Filters for order listing (Supports status filters: Active, Pending, Packed, Shipped, Delivered, Today, All)
   const filteredOrders = ordersList.filter(order => {
-    const orderDate = new Date(order.date);
-    if (orderDate < cutoffDate) return false;
-
-    const matchesSearch = order.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
-                          order.customerName.toLowerCase().includes(orderSearch.toLowerCase());
+    const matchesSearch = !orderSearch.trim() || 
+                          (order.id && order.id.toLowerCase().includes(orderSearch.toLowerCase())) ||
+                          (order.customerName && order.customerName.toLowerCase().includes(orderSearch.toLowerCase())) ||
+                          (order.customerPhone && order.customerPhone.includes(orderSearch));
     
     const matchesStatus = orderFilter === "All" ||
                           (orderFilter === "Active" && order.status !== "Delivered") ||
-                          (orderFilter === "Delivered" && order.status === "Delivered");
+                          (orderFilter === "Pending" && order.status === "Pending") ||
+                          (orderFilter === "Packed" && order.status === "Packed") ||
+                          (orderFilter === "Shipped" && order.status === "Shipped") ||
+                          (orderFilter === "Delivered" && order.status === "Delivered") ||
+                          (orderFilter === "Today" && order.date && new Date(order.date).toDateString() === todayStr);
     
     return matchesSearch && matchesStatus;
   });
@@ -521,8 +639,13 @@ export default function AdminPage() {
   // Add combo hamper
   const handleAddCombo = async (e) => {
     e.preventDefault();
+    const validSelections = comboSelectedProducts.filter(item => item.productId !== "");
+    if (validSelections.length === 0) {
+      alert("Please select at least one existing product from the dropdown to create a combo!");
+      return;
+    }
     if (!newComboName || !newComboPrice || !newComboStock) {
-      alert("Please fill in core hamper details.");
+      alert("Please fill in core hamper details (Title, Price, Stock).");
       return;
     }
 
@@ -547,31 +670,36 @@ export default function AdminPage() {
       }
     }
 
+    const bundleProductDetails = validSelections.map(item => {
+      const prod = productsList.find(p => String(p.id) === String(item.productId));
+      return prod ? `${item.quantity}x ${prod.name}` : null;
+    }).filter(Boolean).join(", ");
+
+    const firstSelectedProd = productsList.find(p => String(p.id) === String(validSelections[0]?.productId));
+    const defaultImage = firstSelectedProd?.image || firstSelectedProd?.images?.[0] || "/images/acacia_wood_casserole.png";
+
     const newId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id)) + 1 : 101;
     const newCombo = {
       id: newId,
       name: newComboName,
       price: parseFloat(newComboPrice),
       stock: parseInt(newComboStock),
-      image: newComboImage || "/images/acacia_wood_casserole.png",
-      department: newComboDept,
-      category: newComboCat,
-      subCategory: newComboSub,
+      image: uploadedImageUrls[0] || newComboImage || defaultImage,
+      department: newComboDept || "Gifting",
+      category: newComboCat || "Gift Hampers",
+      subCategory: newComboSub || "Combos",
       fragile: true,
       microwave: false,
       barcode: "000" + Math.floor(Math.random() * 900000 + 100000),
       hsn: "9505",
       gst: 18,
       soldCount: 0,
-      description: "Luxurious curated dining hamper by Orient Crockeries.",
+      description: `Curated Gift Hamper / Combo Box. Includes: ${bundleProductDetails}.`,
       rating: 5.0,
       reviewCount: 0,
       reviews: [],
-      images: uploadedImageUrls.length > 0 ? uploadedImageUrls : (newComboImage ? [newComboImage] : [])
+      images: uploadedImageUrls.length > 0 ? uploadedImageUrls : (newComboImage ? [newComboImage] : [defaultImage])
     };
-    if (uploadedImageUrls.length > 0) {
-      newCombo.image = uploadedImageUrls[0];
-    }
 
     const addComboToSupabase = async () => {
       try {
@@ -582,6 +710,10 @@ export default function AdminPage() {
         setNewComboPrice("");
         setNewComboStock("");
         setNewComboImage("");
+        setComboSelectedProducts([
+          { id: 1, productId: "", quantity: 1 },
+          { id: 2, productId: "", quantity: 1 }
+        ]);
         setSingleUploadImages([]);
         setIsSingleUploading(false);
         triggerToast(`Registered new Gift Hamper: ${newComboName}`);
@@ -952,15 +1084,34 @@ export default function AdminPage() {
             <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.5rem" }}>Orient Crockery Product Management System</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Operations Registry &bull; Local Storage Mode</p>
           </div>
-          <button className="btn btn-outline btn-sm" onClick={handleLogout}>
-            <i className="fa-solid fa-right-from-bracket"></i> Logout Portal
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={() => { playOrderChime(); triggerToast("🔔 Sound Alert Triggered!"); }}
+              style={{ borderColor: '#d97706', color: '#d97706' }}
+              title="Click once to enable browser sound playback"
+            >
+              <i className="fa-solid fa-bell"></i> Test Sound Chime
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={handleLogout}>
+              <i className="fa-solid fa-right-from-bracket"></i> Logout Portal
+            </button>
+          </div>
         </div>
 
         {/* Metric widgets grid */}
         <div className="erp-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginTop: "1.5rem" }}>
           {/* Card 1: All-Time Revenue */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("All"); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: (activeTab === "orders" && orderFilter === "All") ? "var(--primary)" : "#e2e8f0",
+              boxShadow: (activeTab === "orders" && orderFilter === "All") ? "0 4px 16px rgba(67, 24, 255, 0.15)" : "none"
+            }}
+            title="Click to view all order transactions"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">All-Time Revenue</span>
               <div className="metric-icon-avatar gold">
@@ -972,7 +1123,16 @@ export default function AdminPage() {
           </div>
 
           {/* Card 2: Today's Revenue */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Today"); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: (activeTab === "orders" && orderFilter === "Today") ? "#059669" : "#e2e8f0",
+              boxShadow: (activeTab === "orders" && orderFilter === "Today") ? "0 4px 16px rgba(5, 150, 105, 0.15)" : "none"
+            }}
+            title="Click to view today's orders"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">Today's Revenue</span>
               <div className="metric-icon-avatar green">
@@ -984,7 +1144,16 @@ export default function AdminPage() {
           </div>
 
           {/* Card 3: Total Orders Till Today */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("All"); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: (activeTab === "orders" && orderFilter === "All") ? "#2563eb" : "#e2e8f0",
+              boxShadow: (activeTab === "orders" && orderFilter === "All") ? "0 4px 16px rgba(37, 99, 235, 0.15)" : "none"
+            }}
+            title="Click to view total orders list"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">Total Orders</span>
               <div className="metric-icon-avatar blue">
@@ -996,7 +1165,16 @@ export default function AdminPage() {
           </div>
 
           {/* Card 4: Active Orders */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Active"); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: (activeTab === "orders" && orderFilter === "Active") ? "#4f46e5" : "#e2e8f0",
+              boxShadow: (activeTab === "orders" && orderFilter === "Active") ? "0 4px 16px rgba(79, 70, 229, 0.15)" : "none"
+            }}
+            title="Click to view active dispatches"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">Active Dispatches</span>
               <div className="metric-icon-avatar indigo">
@@ -1008,7 +1186,16 @@ export default function AdminPage() {
           </div>
 
           {/* Card 5: Pending Orders */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Pending"); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: (activeTab === "orders" && orderFilter === "Pending") ? "#ea580c" : "#e2e8f0",
+              boxShadow: (activeTab === "orders" && orderFilter === "Pending") ? "0 4px 16px rgba(234, 88, 12, 0.15)" : "none"
+            }}
+            title="Click to view pending orders"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">Pending Orders</span>
               <div className="metric-icon-avatar amber">
@@ -1020,7 +1207,16 @@ export default function AdminPage() {
           </div>
 
           {/* Card 6: Low Stock Items */}
-          <div className="metric-card-pro">
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("inventory"); setInventorySearch(""); }}
+            style={{ 
+              cursor: "pointer", 
+              borderColor: activeTab === "inventory" ? "#dc2626" : "#e2e8f0",
+              boxShadow: activeTab === "inventory" ? "0 4px 16px rgba(220, 38, 38, 0.15)" : "none"
+            }}
+            title="Click to open inventory registry"
+          >
             <div className="metric-card-header">
               <span className="metric-card-title">Low Stock Alert</span>
               <div className={`metric-icon-avatar ${lowStockCount > 0 ? 'red' : 'green'}`}>
@@ -1035,7 +1231,7 @@ export default function AdminPage() {
 
       <div className="erp-main-section" style={{ padding: "0 6%" }}>
         {/* Tabs list */}
-        <div className="erp-tabs" style={{ display: "flex", gap: "1rem", marginBottom: "25px" }}>
+        <div className="erp-tabs" style={{ display: "flex", gap: "1rem", marginBottom: "25px", flexWrap: "wrap" }}>
           <button 
             className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
             onClick={() => setActiveTab("orders")}
@@ -1055,6 +1251,12 @@ export default function AdminPage() {
             <i className="fa-solid fa-ticket"></i> Coupons & Promos
           </button>
           <button 
+            className={`tab-btn ${activeTab === "promo-popup" ? "active" : ""}`}
+            onClick={() => setActiveTab("promo-popup")}
+          >
+            <i className="fa-solid fa-bullhorn"></i> Promo Popup Manager
+          </button>
+          <button 
             className={`tab-btn ${activeTab === "instructions" ? "active" : ""}`}
             onClick={() => setActiveTab("instructions")}
           >
@@ -1065,44 +1267,123 @@ export default function AdminPage() {
         {/* Tab 1: Orders Queue */}
         {activeTab === "orders" && (
           <div className="erp-content-box">
-            <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h3>Shipment Dispatches Queue</h3>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
+            <div className="panel-header" style={{ marginBottom: "1.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <h3 style={{ margin: 0 }}>Shipment Dispatches Queue</h3>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '6px', 
+                      fontSize: '0.72rem', 
+                      fontWeight: '700', 
+                      color: '#059669', 
+                      backgroundColor: '#ecfdf5', 
+                      border: '1px solid #a7f3d0', 
+                      padding: '2px 10px', 
+                      borderRadius: '12px' 
+                    }}>
+                      <span className="status-indicator online" style={{ width: '6px', height: '6px' }}></span>
+                      Live Auto-Sync: 2m
+                    </span>
+                  </div>
+                  <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: "4px 0 0 0" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
+                </div>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button 
+                    className="btn btn-outline btn-sm" 
+                    onClick={loadDbData}
+                    style={{ 
+                      height: '40px', 
+                      padding: '0 16px',
+                      borderColor: 'var(--primary)', 
+                      color: 'var(--primary)',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '8px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    <i className="fa-solid fa-arrows-rotate"></i> Refresh Data
+                  </button>
+                  <button 
+                    className="btn btn-outline btn-sm" 
+                    onClick={exportOrdersToCSV}
+                    style={{ 
+                      height: '40px', 
+                      padding: '0 16px',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '8px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    <i className="fa-solid fa-file-csv"></i> Export CSV
+                  </button>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', color: '#94a3b8', fontSize: '0.85rem' }}></i>
+                    <input 
+                      type="text" 
+                      className="loyalty-input" 
+                      placeholder="Search ID, customer, phone..." 
+                      style={{ width: "220px", height: "40px", paddingLeft: "34px", borderRadius: "8px", fontSize: "0.85rem" }}
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <button 
-                  className="btn btn-outline btn-sm" 
-                  onClick={loadDbData}
-                  style={{ height: '38px', borderColor: 'var(--primary)', color: 'var(--primary)' }}
-                >
-                  <i className="fa-solid fa-arrows-rotate"></i> Refresh
-                </button>
-                <button 
-                  className="btn btn-outline btn-sm" 
-                  onClick={exportOrdersToCSV}
-                  style={{ height: '38px' }}
-                >
-                  <i className="fa-solid fa-file-csv"></i> Export Past Orders
-                </button>
-                <select 
-                  className="sort-select"
-                  value={orderFilter}
-                  onChange={(e) => setOrderFilter(e.target.value)}
-                  style={{ borderRadius: "8px" }}
-                >
-                  <option value="Active">Active Dispatches</option>
-                  <option value="Delivered">Completed Deliveries</option>
-                  <option value="All">All Transactions</option>
-                </select>
-                <input 
-                  type="text" 
-                  className="loyalty-input" 
-                  placeholder="Search by ID or customer..." 
-                  style={{ width: "240px", borderRadius: "8px" }}
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                />
+
+              {/* Status Filter Quick Pills Bar */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #e2e8f0', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '6px' }}>Filter Status:</span>
+                {[
+                  { label: "Active Dispatches", value: "Active", icon: "fa-truck-fast", count: activeOrdersCount },
+                  { label: "Pending", value: "Pending", icon: "fa-clock-rotate-left", count: pendingOrdersCount },
+                  { label: "Packed", value: "Packed", icon: "fa-box", count: ordersList.filter(o => o.status === "Packed").length },
+                  { label: "Shipped", value: "Shipped", icon: "fa-paper-plane", count: ordersList.filter(o => o.status === "Shipped").length },
+                  { label: "Delivered", value: "Delivered", icon: "fa-circle-check", count: ordersList.filter(o => o.status === "Delivered").length },
+                  { label: "Today's Orders", value: "Today", icon: "fa-calendar-day", count: todayOrders.length },
+                  { label: "All Transactions", value: "All", icon: "fa-list", count: totalOrdersCount }
+                ].map(filterBtn => (
+                  <button
+                    key={filterBtn.value}
+                    onClick={() => setOrderFilter(filterBtn.value)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '20px',
+                      fontSize: '0.82rem',
+                      fontWeight: '600',
+                      border: orderFilter === filterBtn.value ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
+                      backgroundColor: orderFilter === filterBtn.value ? '#f0f4ff' : '#ffffff',
+                      color: orderFilter === filterBtn.value ? 'var(--primary)' : '#475569',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: orderFilter === filterBtn.value ? '0 2px 8px rgba(67,24,255,0.12)' : 'none'
+                    }}
+                  >
+                    <i className={`fa-solid ${filterBtn.icon}`} style={{ fontSize: '0.75rem' }}></i>
+                    {filterBtn.label}
+                    <span style={{ 
+                      backgroundColor: orderFilter === filterBtn.value ? 'var(--primary)' : '#e2e8f0', 
+                      color: orderFilter === filterBtn.value ? '#ffffff' : '#475569', 
+                      borderRadius: '10px', 
+                      padding: '1px 7px', 
+                      fontSize: '0.72rem', 
+                      fontWeight: '700' 
+                    }}>
+                      {filterBtn.count}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1174,9 +1455,10 @@ export default function AdminPage() {
 
                             <button 
                               className="btn btn-outline btn-sm"
-                              onClick={() => setInvoiceOrder(order)}
+                              onClick={() => generateInvoicePDF(order)}
+                              title="Download Official Orient Crockery Tax Receipt PDF"
                             >
-                              <i className="fa-solid fa-receipt"></i> Print Tax Receipt
+                              <i className="fa-solid fa-file-pdf"></i> Print Tax Receipt
                             </button>
                           </div>
                         </td>
@@ -1285,20 +1567,40 @@ export default function AdminPage() {
             </div>
           </div>
         )}
-      </div>
-      {/* Modals are placed below main */}
 
+        {/* Tab 3: Coupons */}
+        {activeTab === "coupons" && <CouponsTab />}
+
+        {/* Tab 4: Promo Popup Manager */}
+        {activeTab === "promo-popup" && <PromoPopupTab />}
+
+        {/* Tab 5: Instructions */}
+        {activeTab === "instructions" && <InstructionsTab />}
+      </div>
       {/* Add Product Modal Form */}
       {showAddProductModal && (
         <div className="modal-overlay active" onClick={() => { setShowAddProductModal(false); setSingleUploadImages([]); }}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "700px", gridTemplateColumns: "1fr", maxHeight: "90vh", overflowY: "auto" }}>
             <button className="modal-close-btn" onClick={() => { setShowAddProductModal(false); setSingleUploadImages([]); }}>
               <i className="fa-solid fa-xmark"></i>
             </button>
             
-            <form onSubmit={handleAddProduct} style={{ padding: "20px", overflowY: "auto", maxHeight: "80vh" }}>
-              <span className="modal-meta-label">Add a new product</span>
-              <h2 className="modal-title" style={{ fontSize: "1.6rem" }}>Create Single Product</h2>
+            <form onSubmit={handleAddProduct} style={{ padding: "1.5rem" }}>
+              <span className="modal-meta-label">Inventory Management</span>
+              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "0.8rem" }}>Create Single Product</h2>
+              
+              {/* Instructions Booklet Box */}
+              <div style={{ background: "rgba(184, 134, 11, 0.05)", padding: "14px 16px", borderRadius: "10px", border: "1px dashed var(--primary)", marginBottom: "1.5rem" }}>
+                <h4 style={{ margin: "0 0 8px 0", color: "var(--dark)", fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <i className="fa-solid fa-circle-info" style={{ color: "var(--primary)" }}></i> Instructions & Setup Steps
+                </h4>
+                <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "0.82rem", color: "#555", lineHeight: "1.6" }}>
+                  <li><b>Product Essentials:</b> Enter the product title name, retail price (₹), and initial stock count.</li>
+                  <li><b>Inventory Details:</b> Set stock status (Available/Out of Stock), Barcode, HSN Code, and GST Rate (%).</li>
+                  <li><b>Department & Category:</b> Assign to a specific department (e.g. Crockery, Cookware, Woodcraft).</li>
+                  <li><b>Product Images:</b> Upload high-quality photo files or paste an image URL path before submitting.</li>
+                </ol>
+              </div>
               
               <div className="form-grid" style={{ marginBottom: "1.5rem" }}>
                 <div className="form-group full-width">
@@ -1307,6 +1609,7 @@ export default function AdminPage() {
                     type="text" 
                     className="form-input" 
                     required
+                    placeholder="Enter product title..."
                     value={newProduct.name}
                     onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                   />
@@ -1317,6 +1620,7 @@ export default function AdminPage() {
                     type="number" 
                     className="form-input" 
                     required
+                    placeholder="e.g. 1500"
                     value={newProduct.price}
                     onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
                   />
@@ -1327,6 +1631,7 @@ export default function AdminPage() {
                     type="number" 
                     className="form-input" 
                     required
+                    placeholder="e.g. 50"
                     value={newProduct.stock}
                     onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
                   />
@@ -1347,6 +1652,7 @@ export default function AdminPage() {
                   <input 
                     type="text" 
                     className="form-input" 
+                    placeholder="e.g. 8901234567"
                     value={newProduct.barcode}
                     onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
                   />
@@ -1356,6 +1662,7 @@ export default function AdminPage() {
                   <input 
                     type="text" 
                     className="form-input" 
+                    placeholder="e.g. 69111010"
                     value={newProduct.hsn}
                     onChange={(e) => setNewProduct({ ...newProduct, hsn: e.target.value })}
                   />
@@ -1365,11 +1672,12 @@ export default function AdminPage() {
                   <input 
                     type="number" 
                     className="form-input" 
+                    placeholder="18"
                     value={newProduct.gst}
                     onChange={(e) => setNewProduct({ ...newProduct, gst: e.target.value })}
                   />
                 </div>
-                <div className="form-group">
+                <div className="form-group full-width">
                   <span className="form-label">Department</span>
                   <select 
                     className="sort-select"
@@ -1442,229 +1750,267 @@ export default function AdminPage() {
       {/* Edit Product Modal Form */}
       {editingProduct && (
         <div className="modal-overlay active" onClick={() => { setEditingProduct(null); setSingleUploadImages([]); }}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1000px", gridTemplateColumns: "1.4fr 1fr", overflow: "hidden", borderRadius: "16px", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)" }}>
-            <button className="modal-close-btn" onClick={() => { setEditingProduct(null); setSingleUploadImages([]); }} style={{ zIndex: 10, backgroundColor: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "700px", gridTemplateColumns: "1fr", maxHeight: "90vh", overflowY: "auto", borderRadius: "16px", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)" }}>
+            <button className="modal-close-btn" onClick={() => { setEditingProduct(null); setSingleUploadImages([]); }}>
               <i className="fa-solid fa-xmark"></i>
             </button>
             
-            <form onSubmit={handleUpdateProduct} className="modal-content-side" style={{ borderRight: "1px solid #eaeaea", overflowY: "auto", maxHeight: "85vh", background: "linear-gradient(to bottom right, #ffffff, #fcfcfc)", padding: "2.5rem" }}>
-              <div style={{ marginBottom: "2rem", borderBottom: "2px solid #f0f0f0", paddingBottom: "1rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", color: "#d4af37" }}>Edit Specifications</span>
-                <h2 style={{ fontSize: "1.8rem", color: "#111", fontFamily: "var(--font-serif)", marginTop: "0.5rem" }}>
-                  SKU #{editingProduct.id}
-                </h2>
-              </div>
+            <form onSubmit={handleUpdateProduct} style={{ padding: "1.5rem" }}>
+              <span className="modal-meta-label">Edit Specifications</span>
+              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "1.2rem" }}>
+                Edit Product — SKU #{editingProduct.id}
+              </h2>
               
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", marginBottom: "2rem" }}>
+              <div className="form-grid" style={{ marginBottom: "1.5rem" }}>
+                <div className="form-group full-width">
+                  <span className="form-label">Product Name</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editingProduct.name}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group full-width">
+                  <span className="form-label">Product Description</span>
+                  <textarea 
+                    className="form-input" 
+                    rows="3"
+                    placeholder="Enter detailed description here..."
+                    value={editingProduct.description || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                    style={{ resize: "vertical", width: "100%" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">Price (₹)</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    value={editingProduct.price}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })}
+                  />
+                </div>
                 
-                {/* SECTION 1: General Info */}
-                <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                  <h3 style={{ fontSize: "1rem", color: "#475569", marginBottom: "15px", fontWeight: "600", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>General Information</h3>
-                  <div className="form-group full-width" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px", marginBottom: "15px" }}>
-                    <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Product Name</span>
+                <div className="form-group">
+                  <span className="form-label">Stock Units</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    value={editingProduct.stock}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, stock: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">Stock Status</span>
+                  <select 
+                    className="sort-select"
+                    value={editingProduct.stockStatus || "Available"}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, stockStatus: e.target.value })}
+                  >
+                    <option value="Available">Available</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">Barcode</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editingProduct.barcode || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">HSN Code</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={editingProduct.hsn || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, hsn: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">GST Rate (%)</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    value={editingProduct.gst || 18}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, gst: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group full-width">
+                  <span className="form-label">Department</span>
+                  <select 
+                    className="sort-select"
+                    value={editingProduct.department}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, department: e.target.value })}
+                  >
+                    <option value="Gifting">Gifting</option>
+                    <option value="Crockery & Dining">Crockery & Dining</option>
+                    <option value="Cookware">Cookware</option>
+                    <option value="Woodcraft">Woodcraft</option>
+                    <option value="Home Décor">Home Décor</option>
+                  </select>
+                </div>
+
+                {/* Existing Images Gallery */}
+                <div className="form-group full-width">
+                  <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Existing Images</span>
+                    <span style={{ fontSize: "0.75rem", color: "#e63946", fontWeight: "500", backgroundColor: "#ffe3e3", padding: "3px 8px", borderRadius: "12px" }}>Click 'X' to delete</span>
+                  </span>
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1.5px solid #cbd5e1" }}>
+                    {(() => {
+                      const currentImages = editingProduct.images?.length > 0 ? editingProduct.images : (editingProduct.image && editingProduct.image !== '/placeholder.jpg' ? [editingProduct.image] : []);
+                      if (currentImages.length === 0) {
+                        return <p style={{ fontSize: "0.9rem", color: "#64748b", margin: 0, fontStyle: "italic" }}>No images currently attached to this product.</p>;
+                      }
+                      return currentImages.map((imgUrl, idx) => (
+                        <div key={idx} style={{ position: "relative", width: "70px", height: "70px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1", backgroundColor: "#fff" }}>
+                          <img src={imgUrl} alt={`Product ${idx}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                          <button 
+                            type="button"
+                            title="Delete Image"
+                            onClick={() => {
+                              if (window.confirm("Remove this image?")) {
+                                const newImages = currentImages.filter((_, i) => i !== idx);
+                                setEditingProduct({ 
+                                  ...editingProduct, 
+                                  images: newImages, 
+                                  image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                                });
+                              }
+                            }}
+                            style={{ 
+                              position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
+                              color: "white", border: "none", borderRadius: "50%", width: "20px", height: "20px", 
+                              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
+                              fontSize: "0.7rem", zIndex: 10
+                            }}
+                          >
+                            <i className="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                <div className="form-group full-width">
+                  <span className="form-label">Upload New / Additional Images</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
+                    disabled={isSingleUploading}
+                    className="form-input"
+                  />
+                  {singleUploadImages.length > 0 && (
+                    <p style={{ margin: "6px 0 0 0", fontSize: "0.8rem", color: "#059669", fontWeight: "500" }}>
+                      <i className="fa-solid fa-circle-check"></i> {singleUploadImages.length} new image(s) ready to insert
+                    </p>
+                  )}
+                </div>
+                
+                <div className="form-group full-width" style={{ flexDirection: "row", gap: "25px", margin: "5px 0" }}>
+                  <label className="filter-checkbox-label">
                     <input 
-                      type="text" 
-                      className="form-input" 
-                      value={editingProduct.name}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                      style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
+                      type="checkbox" 
+                      checked={editingProduct.fragile}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, fragile: e.target.checked })}
                     />
-                  </div>
-                  <div className="form-group full-width" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                    <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Product Description</span>
-                    <textarea 
-                      className="form-input" 
-                      rows="3"
-                      placeholder="Enter detailed description here..."
-                      value={editingProduct.description || ""}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
-                      style={{ resize: "vertical", width: "100%", borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", lineHeight: "1.5", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
+                    <span>Fragile Handling</span>
+                  </label>
+                  <label className="filter-checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={editingProduct.microwave}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, microwave: e.target.checked })}
                     />
-                  </div>
+                    <span>Microwave Safe</span>
+                  </label>
                 </div>
 
-                {/* SECTION 2: Pricing & Inventory */}
-                <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                  <h3 style={{ fontSize: "1rem", color: "#475569", marginBottom: "15px", fontWeight: "600", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>Pricing & Inventory</h3>
-                  <div className="form-grid" style={{ rowGap: "1.2rem", columnGap: "1rem" }}>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Price (₹)</span>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={editingProduct.price}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      />
-                    </div>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Stock Units</span>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={editingProduct.stock}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, stock: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      />
-                    </div>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Stock Status</span>
-                      <select 
-                        className="sort-select"
-                        value={editingProduct.stockStatus || "Available"}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, stockStatus: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      >
-                        <option value="Available">Available</option>
-                        <option value="Out of Stock">Out of Stock</option>
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Barcode</span>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        value={editingProduct.barcode || ""}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 3: Taxation & Category */}
-                <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                  <h3 style={{ fontSize: "1rem", color: "#475569", marginBottom: "15px", fontWeight: "600", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>Classification & Tax</h3>
-                  <div className="form-grid" style={{ rowGap: "1.2rem", columnGap: "1rem" }}>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>HSN Code</span>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        value={editingProduct.hsn || ""}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, hsn: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      />
-                    </div>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>GST Rate (%)</span>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        value={editingProduct.gst || 18}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, gst: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      />
-                    </div>
-                    <div className="form-group" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "15px" }}>
-                      <span className="form-label" style={{ fontWeight: "600", color: "#333", display: "block", marginBottom: "8px" }}>Department</span>
-                      <select 
-                        className="sort-select"
-                        value={editingProduct.department}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, department: e.target.value })}
-                        style={{ borderRadius: "6px", border: "2px solid #000", padding: "10px", fontSize: "0.95rem", width: "100%", backgroundColor: "#fff", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.05)" }}
-                      >
-                        <option value="Gifting">Gifting</option>
-                        <option value="Crockery & Dining">Crockery & Dining</option>
-                        <option value="Cookware">Cookware</option>
-                        <option value="Woodcraft">Woodcraft</option>
-                        <option value="Home Décor">Home Décor</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 4: Media & Handling */}
-                <div style={{ backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>
-                  <h3 style={{ fontSize: "1rem", color: "#475569", marginBottom: "15px", fontWeight: "600", borderBottom: "1px solid #f1f5f9", paddingBottom: "10px" }}>Media & Handling</h3>
+                {/* Customer Reviews Management Box */}
+                <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 10px 0", fontSize: "0.95rem", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <i className="fa-solid fa-star" style={{ color: "#f59e0b" }}></i> Customer Reviews Management
+                  </h4>
                   
-                  {/* Existing Images Gallery */}
-                  <div className="form-group full-width">
-                    <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "600", color: "#333" }}>
-                      <span>Existing Images</span>
-                      <span style={{ fontSize: "0.75rem", color: "#e63946", fontWeight: "500", backgroundColor: "#ffe3e3", padding: "3px 8px", borderRadius: "12px" }}>Click 'X' to delete</span>
-                    </span>
-                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                      {(() => {
-                        const currentImages = editingProduct.images?.length > 0 ? editingProduct.images : (editingProduct.image && editingProduct.image !== '/placeholder.jpg' ? [editingProduct.image] : []);
-                        if (currentImages.length === 0) {
-                          return <p style={{ fontSize: "0.9rem", color: "#64748b", margin: 0, fontStyle: "italic" }}>No images currently attached to this product.</p>;
-                        }
-                        return currentImages.map((imgUrl, idx) => (
-                          <div key={idx} style={{ position: "relative", width: "80px", height: "80px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1", backgroundColor: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-                            <img src={imgUrl} alt={`Product ${idx}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  {/* Manual Review additions */}
+                  <div style={{ padding: "10px", backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1rem" }}>
+                    <span className="modal-meta-label" style={{ fontSize: "0.75rem" }}>Inject Customer Review</span>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Author Name"
+                        value={newReviewAuthor}
+                        onChange={(e) => setNewReviewAuthor(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <select 
+                        className="sort-select" 
+                        value={newReviewRating} 
+                        onChange={(e) => setNewReviewRating(parseInt(e.target.value))}
+                        style={{ width: "80px" }}
+                      >
+                        <option value="5">5★</option>
+                        <option value="4">4★</option>
+                        <option value="3">3★</option>
+                      </select>
+                    </div>
+                    <textarea 
+                      rows="2" 
+                      className="form-input" 
+                      placeholder="Review details..."
+                      style={{ resize: "vertical", width: "100%" }}
+                      value={newReviewText}
+                      onChange={(e) => setNewReviewText(e.target.value)}
+                    />
+                    <button 
+                      type="button"
+                      className="btn btn-outline btn-sm btn-full" 
+                      style={{ marginTop: "8px", padding: "6px" }}
+                      onClick={handleAddReviewManually}
+                    >
+                      + Insert Review
+                    </button>
+                  </div>
+
+                  {/* Reviews List */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(!editingProduct.reviews || editingProduct.reviews.length === 0) ? (
+                      <p style={{ fontStyle: "italic", fontSize: "0.8rem", color: "#64748b", margin: 0 }}>No customer reviews attached.</p>
+                    ) : (
+                      editingProduct.reviews.map(rev => (
+                        <div key={rev.id} style={{ fontSize: "0.8rem", padding: "8px 12px", background: "#fff", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "600", marginBottom: "4px", color: "#1e293b" }}>
+                            <span>{rev.reviewerName} ({rev.rating}★)</span>
                             <button 
                               type="button"
-                              title="Delete Image"
-                              onClick={() => {
-                                if (window.confirm("Remove this image?")) {
-                                  const newImages = currentImages.filter((_, i) => i !== idx);
-                                  setEditingProduct({ 
-                                    ...editingProduct, 
-                                    images: newImages, 
-                                    image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
-                                  });
-                                }
-                              }}
-                              style={{ 
-                                position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
-                                color: "white", border: "none", borderRadius: "50%", width: "22px", height: "22px", 
-                                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
-                                fontSize: "0.7rem", transition: "transform 0.2s", zIndex: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
-                              }}
-                              onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.1)"}
-                              onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+                              onClick={() => handleDeleteReview(rev.id)}
+                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
                             >
-                              <i className="fa-solid fa-xmark"></i>
+                              Delete
                             </button>
                           </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-
-                  <div className="form-group full-width" style={{ marginTop: "15px" }}>
-                    <span className="form-label" style={{ fontWeight: "600", color: "#333" }}>Upload New / Additional Images</span>
-                    <div style={{ padding: "10px", border: "1px dashed #cbd5e1", borderRadius: "12px", backgroundColor: "#f8fafc" }}>
-                      <input 
-                        type="file" 
-                        multiple 
-                        accept="image/png, image/jpeg, image/jpg, image/webp"
-                        onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
-                        disabled={isSingleUploading}
-                        className="form-input"
-                        style={{ border: "none", padding: "5px", background: "transparent", width: "100%" }}
-                      />
-                    </div>
-                    {singleUploadImages.length > 0 && (
-                      <p style={{ margin: "8px 0 0 0", fontSize: "0.85rem", color: "#059669", fontWeight: "500", display: "flex", alignItems: "center", gap: "5px" }}>
-                        <i className="fa-solid fa-circle-check"></i> {singleUploadImages.length} new image(s) ready to insert
-                      </p>
+                          <p style={{ color: "#475569", margin: 0 }}>{rev.comment}</p>
+                        </div>
+                      ))
                     )}
                   </div>
-                  
-                  <div className="form-group full-width" style={{ flexDirection: "row", gap: "25px", marginTop: "15px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-                    <label className="filter-checkbox-label" style={{ fontWeight: "500", color: "#333" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={editingProduct.fragile}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, fragile: e.target.checked })}
-                        style={{ accentColor: "var(--primary)" }}
-                      />
-                      <span>Fragile Handling</span>
-                    </label>
-                    <label className="filter-checkbox-label" style={{ fontWeight: "500", color: "#333" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={editingProduct.microwave}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, microwave: e.target.checked })}
-                        style={{ accentColor: "var(--primary)" }}
-                      />
-                      <span>Microwave Safe</span>
-                    </label>
-                  </div>
                 </div>
-                
+
               </div>
 
               <button 
@@ -1672,14 +2018,10 @@ export default function AdminPage() {
                 className="btn btn-primary btn-full" 
                 disabled={isSingleUploading}
                 style={{ 
-                  background: "linear-gradient(135deg, #111, #333)", 
-                  color: "#fff", 
                   padding: "14px", 
                   fontSize: "1.05rem", 
                   borderRadius: "8px", 
-                  fontWeight: "600",
-                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                  transition: "all 0.3s"
+                  fontWeight: "600"
                 }}
               >
                 {isSingleUploading ? (
@@ -1689,72 +2031,6 @@ export default function AdminPage() {
                 )}
               </button>
             </form>
-
-            {/* Editing Product Reviews Side panel */}
-            <div className="modal-content-side" style={{ overflowY: "auto", maxHeight: "80vh" }}>
-              <h3 style={{ fontFamily: "var(--font-serif)", fontSize: "1.3rem", marginBottom: "1rem" }}>Product Reviews Review</h3>
-              
-              {/* Manual Review additions */}
-              <div style={{ padding: "12px", border: "1px solid var(--border)", backgroundColor: "var(--bg-alt)", marginBottom: "1.5rem" }}>
-                <span className="modal-meta-label">Inject Customer Review</span>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                  <input 
-                    type="text" 
-                    className="loyalty-input" 
-                    placeholder="Author Name"
-                    value={newReviewAuthor}
-                    onChange={(e) => setNewReviewAuthor(e.target.value)}
-                  />
-                  <select 
-                    className="sort-select" 
-                    value={newReviewRating} 
-                    onChange={(e) => setNewReviewRating(parseInt(e.target.value))}
-                    style={{ padding: "4px" }}
-                  >
-                    <option value="5">5★</option>
-                    <option value="4">4★</option>
-                    <option value="3">3★</option>
-                  </select>
-                </div>
-                <textarea 
-                  rows="2" 
-                  className="form-input" 
-                  placeholder="Review review details..."
-                  style={{ resize: "none", fontSize: "0.8rem", width: "100%", padding: "6px" }}
-                  value={newReviewText}
-                  onChange={(e) => setNewReviewText(e.target.value)}
-                />
-                <button 
-                  className="btn btn-outline btn-sm btn-full" 
-                  style={{ marginTop: "8px", padding: "4px" }}
-                  onClick={handleAddReviewManually}
-                >
-                  Insert Review
-                </button>
-              </div>
-
-              {/* Reviews List */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {(!editingProduct.reviews || editingProduct.reviews.length === 0) ? (
-                  <p style={{ fontStyle: "italic", fontSize: "0.8rem", color: "var(--text-muted)" }}>No customer reviews injected.</p>
-                ) : (
-                  editingProduct.reviews.map(rev => (
-                    <div key={rev.id} style={{ fontSize: "0.8rem", padding: "8px", borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "600", marginBottom: "4px" }}>
-                        <span>{rev.reviewerName} ({rev.rating}★)</span>
-                        <button 
-                          onClick={() => handleDeleteReview(rev.id)}
-                          style={{ background: "none", border: "none", color: "var(--error)", cursor: "pointer" }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      <p style={{ color: "var(--text-muted)" }}>{rev.comment}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1762,28 +2038,154 @@ export default function AdminPage() {
       {/* Gift Hamper / Combo Modal */}
       {showComboModal && (
         <div className="modal-overlay active" onClick={() => { setShowComboModal(false); setSingleUploadImages([]); }}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "550px", gridTemplateColumns: "1fr" }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "700px", gridTemplateColumns: "1fr", maxHeight: "90vh", overflowY: "auto" }}>
             <button className="modal-close-btn" onClick={() => { setShowComboModal(false); setSingleUploadImages([]); }}>
               <i className="fa-solid fa-xmark"></i>
             </button>
-            <form onSubmit={handleAddCombo} className="modal-content-side">
-              <span className="modal-meta-label">Hamper Registration</span>
-              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "1.5rem" }}>Register Gift Hamper / Combo</h2>
+            <form onSubmit={handleAddCombo} className="modal-content-side" style={{ padding: "1.5rem" }}>
+              <span className="modal-meta-label">Hamper & Combo Registration</span>
+              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "0.5rem" }}>Register Gift Hamper / Combo</h2>
               
+              {/* Instructions Booklet Box */}
+              <div style={{ background: "rgba(184, 134, 11, 0.05)", padding: "14px 16px", borderRadius: "10px", border: "1px dashed var(--primary)", marginBottom: "1.5rem" }}>
+                <h4 style={{ margin: "0 0 8px 0", color: "var(--dark)", fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <i className="fa-solid fa-circle-info" style={{ color: "var(--primary)" }}></i> Instructions & Setup Steps
+                </h4>
+                <ol style={{ margin: 0, paddingLeft: "18px", fontSize: "0.82rem", color: "#555", lineHeight: "1.6" }}>
+                  <li><b>Select Products:</b> Click "+ Add Product" and select existing items from your store catalog dropdown.</li>
+                  <li><b>Set Quantities:</b> Set the item quantities. The system auto-calculates the Combined Base Price total.</li>
+                  <li><b>Pricing & Title:</b> Enter a Hamper Title (or click "Auto-Generate Title") and specify your final Combo Offer Price.</li>
+                  <li><b>Image Upload:</b> Upload a custom hamper photo, or leave blank to auto-use the photo of the first item.</li>
+                </ol>
+              </div>
+
+              {/* Product Selection Section */}
+              <div style={{ background: "#f8f9fa", padding: "1.2rem", borderRadius: "10px", border: "1px solid #e9ecef", marginBottom: "1.5rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <h4 style={{ margin: 0, fontSize: "1rem", color: "var(--primary)" }}>
+                    <i className="fa-solid fa-boxes-stacked" style={{ marginRight: "6px" }}></i>
+                    Select Products to Include ({comboSelectedProducts.length} Items)
+                  </h4>
+                  <button 
+                    type="button" 
+                    className="btn btn-outline btn-sm"
+                    onClick={handleAddComboRow}
+                    style={{ fontSize: "0.8rem", padding: "4px 10px" }}
+                  >
+                    <i className="fa-solid fa-plus"></i> Add Product
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {comboSelectedProducts.map((row, index) => {
+                    const selectedProd = productsList.find(p => String(p.id) === String(row.productId));
+                    return (
+                      <div 
+                        key={row.id} 
+                        style={{ 
+                          display: "grid", 
+                          gridTemplateColumns: "30px 1fr 90px 90px 36px", 
+                          gap: "8px", 
+                          alignItems: "center", 
+                          background: "white", 
+                          padding: "8px 12px", 
+                          borderRadius: "8px", 
+                          border: "1px solid #dee2e6" 
+                        }}
+                      >
+                        <span style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#888" }}>#{index + 1}</span>
+                        <select 
+                          className="sort-select" 
+                          value={row.productId} 
+                          onChange={(e) => handleComboProductChange(row.id, e.target.value)}
+                          style={{ width: "100%", fontSize: "0.85rem", padding: "6px" }}
+                        >
+                          <option value="">-- Choose Product --</option>
+                          {productsList.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} — ₹{p.price} ({p.department || "General"})
+                            </option>
+                          ))}
+                        </select>
+                        <div>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            className="form-input" 
+                            value={row.quantity} 
+                            onChange={(e) => handleComboQuantityChange(row.id, e.target.value)}
+                            style={{ fontSize: "0.85rem", padding: "6px", textAlign: "center" }}
+                            title="Quantity"
+                          />
+                        </div>
+                        <div style={{ fontSize: "0.85rem", fontWeight: "bold", textAlign: "right", color: "var(--primary)" }}>
+                          ₹{selectedProd ? (parseFloat(selectedProd.price) * row.quantity).toLocaleString() : 0}
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveComboRow(row.id)}
+                          style={{ background: "none", border: "none", color: "#dc3545", cursor: "pointer", fontSize: "0.9rem" }}
+                          title="Remove item"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Combined Total Summary */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px dashed #ccc" }}>
+                  <span style={{ fontSize: "0.9rem", color: "#555" }}>
+                    Combined Base Price Total:
+                  </span>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: "var(--dark)" }}>
+                      ₹{comboBasePrice.toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNewComboPrice(comboBasePrice.toString())}
+                      style={{ display: "block", fontSize: "0.7rem", color: "var(--primary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", marginTop: "2px" }}
+                    >
+                      Use Base Price
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Hamper Core Details */}
               <div className="form-grid" style={{ marginBottom: "1.5rem" }}>
                 <div className="form-group full-width">
-                  <span className="form-label">Hamper Title Name</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="form-label">Hamper Title Name</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const names = comboSelectedProducts
+                          .map(r => productsList.find(p => String(p.id) === String(r.productId))?.name)
+                          .filter(Boolean);
+                        if (names.length > 0) {
+                          setNewComboName(`${names.join(" + ")} Hamper`);
+                        }
+                      }}
+                      style={{ fontSize: "0.7rem", color: "var(--primary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      Auto-Generate Title
+                    </button>
+                  </div>
                   <input 
                     type="text" 
                     className="form-input" 
                     required 
-                    placeholder="E.g. Diwali Teapot Gold Premium Set"
+                    placeholder="E.g. Royal Diwali Tea & Dinner Combo Set"
                     value={newComboName} 
                     onChange={(e) => setNewComboName(e.target.value)} 
                   />
                 </div>
+
                 <div className="form-group">
-                  <span className="form-label">Price (₹)</span>
+                  <span className="form-label">Combo Offer Price (₹)</span>
                   <input 
                     type="number" 
                     className="form-input" 
@@ -1793,6 +2195,7 @@ export default function AdminPage() {
                     onChange={(e) => setNewComboPrice(e.target.value)} 
                   />
                 </div>
+
                 <div className="form-group">
                   <span className="form-label">Stock Units</span>
                   <input 
@@ -1804,7 +2207,35 @@ export default function AdminPage() {
                     onChange={(e) => setNewComboStock(e.target.value)} 
                   />
                 </div>
-                  <span className="form-label">Upload Product Images</span>
+
+                <div className="form-group">
+                  <span className="form-label">Department</span>
+                  <select 
+                    className="sort-select"
+                    value={newComboDept}
+                    onChange={(e) => setNewComboDept(e.target.value)}
+                  >
+                    <option value="Gifting">Gifting</option>
+                    <option value="Crockery & Dining">Crockery & Dining</option>
+                    <option value="Cookware">Cookware</option>
+                    <option value="Woodcraft">Woodcraft</option>
+                    <option value="Home Décor">Home Décor</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <span className="form-label">Category Group</span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Gift Hampers"
+                    value={newComboCat}
+                    onChange={(e) => setNewComboCat(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group full-width">
+                  <span className="form-label">Upload Custom Hamper Image (Optional)</span>
                   <input 
                     type="file" 
                     multiple 
@@ -1820,44 +2251,22 @@ export default function AdminPage() {
                     </p>
                   )}
                 </div>
-                <div className="form-group full-width" style={{ marginTop: "10px" }}>
-                  <span className="form-label">Or Image URL Path</span>
+
+                <div className="form-group full-width">
+                  <span className="form-label">Or Image URL Path (Optional)</span>
                   <input 
                     type="text" 
                     className="form-input" 
-                    placeholder="/images/acacia_wood_casserole.png"
+                    placeholder="Leave blank to use image of first selected item"
                     value={newComboImage} 
                     onChange={(e) => setNewComboImage(e.target.value)} 
                     disabled={singleUploadImages.length > 0}
-                  />
-                <div className="form-group">
-                  <span className="form-label">Department</span>
-                  <select 
-                    className="sort-select"
-                    value={newComboDept}
-                    onChange={(e) => setNewComboDept(e.target.value)}
-                  >
-                    <option value="Gifting">Gifting</option>
-                    <option value="Crockery & Dining">Crockery & Dining</option>
-                    <option value="Cookware">Cookware</option>
-                    <option value="Woodcraft">Woodcraft</option>
-                    <option value="Home Décor">Home Décor</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <span className="form-label">Category Group</span>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Gift Hampers"
-                    value={newComboCat}
-                    onChange={(e) => setNewComboCat(e.target.value)}
                   />
                 </div>
               </div>
 
               <button type="submit" className="btn btn-primary btn-full" disabled={isSingleUploading}>
-                {isSingleUploading ? "Registering..." : "Register in Database"}
+                {isSingleUploading ? "Registering Combo..." : "Register Combo in Database"}
               </button>
             </form>
           </div>
@@ -2041,10 +2450,64 @@ export default function AdminPage() {
       {/* Tab 4: Instructions */}
       {activeTab === "instructions" && <InstructionsTab />}
 
-      {/* Floating Toast Notification */}
-      <div className={`toast toast-success ${showToast ? "show" : ""}`}>
-        <i className="fa-solid fa-circle-check" style={{ color: "var(--primary)", fontSize: "1.1rem" }}></i>
-        <span>{toastMessage}</span>
+      {/* Floating Luxury Toast Notification Banner */}
+      <div 
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          zIndex: 99999,
+          display: showToast ? "flex" : "none",
+          alignItems: "center",
+          gap: "14px",
+          backgroundColor: "rgba(15, 23, 42, 0.95)",
+          backdropFilter: "blur(12px)",
+          color: "#ffffff",
+          padding: "14px 22px",
+          borderRadius: "14px",
+          border: "1px solid rgba(217, 119, 6, 0.4)",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(217, 119, 6, 0.2)",
+          maxWidth: "480px",
+          transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+        }}
+      >
+        <div style={{
+          width: "36px",
+          height: "36px",
+          minWidth: "36px",
+          borderRadius: "50%",
+          backgroundColor: "rgba(217, 119, 6, 0.2)",
+          border: "1px solid rgba(217, 119, 6, 0.6)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fbbf24",
+          fontSize: "1.1rem"
+        }}>
+          <i className="fa-solid fa-bell-concierge"></i>
+        </div>
+        <div style={{ flexGrow: 1 }}>
+          <div style={{ fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", color: "#fbbf24", marginBottom: "2px" }}>
+            Orient System Alert
+          </div>
+          <div style={{ fontSize: "0.9rem", fontWeight: "500", color: "#f8fafc", lineHeight: "1.4" }}>
+            {toastMessage}
+          </div>
+        </div>
+        <button 
+          onClick={() => setShowToast(false)}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#94a3b8",
+            fontSize: "1.2rem",
+            cursor: "pointer",
+            padding: "0 0 0 8px",
+            lineHeight: 1
+          }}
+        >
+          &times;
+        </button>
       </div>
     </div>
   );

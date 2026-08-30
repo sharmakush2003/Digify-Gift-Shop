@@ -44,6 +44,14 @@ next-env.d.ts
 crockery work website.docx
 
 *.pdf  
- 
+# vercel
 .vercel
 .env*.local
+
+# raw source asset folders
+/La Coppera
+/Mashakh Woodcraft
+/Ready_For_Upload
+/TRIVANTAGE PRO
+/__MACOSX
+

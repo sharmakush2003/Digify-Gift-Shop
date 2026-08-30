@@ -62,43 +62,61 @@ export function AppProvider({ children }) {
     const fetchUserData = async () => {
       if (user) {
         try {
-          const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
-          if (data) {
-            if (data.wishlist) setWishlist(data.wishlist);
+          const { data } = await supabase.from('users').select('*').eq('id', user.id).single();
+          if (data && data.wishlist) {
+            setWishlist(data.wishlist);
           }
           
-          // Fetch orders for this user
-          const { data: dbOrders } = await supabase.from('orders').select('*').eq('guest_email', user.email);
+          // Fetch all orders from Supabase & LocalStorage for this user
+          const { data: dbOrders } = await supabase.from('orders').select('*');
+          const localOrders = getOrders() || [];
+          
+          let combinedOrders = [];
+          
           if (dbOrders && dbOrders.length > 0) {
-            const localOrders = getOrders();
-            // Map the DB schema back to what the frontend expects
-            const mappedOrders = dbOrders.map(dbOrder => {
+            // Filter DB orders matching user's email (case insensitive) or phone
+            const userDbOrders = dbOrders.filter(dbOrder => {
+              const emailMatch = dbOrder.guest_email && user.email && 
+                dbOrder.guest_email.trim().toLowerCase() === user.email.trim().toLowerCase();
+              const phoneMatch = dbOrder.guest_phone && (user.phoneNumber || user.email) && 
+                (user.email.includes(dbOrder.guest_phone) || (user.phoneNumber && user.phoneNumber.includes(dbOrder.guest_phone)));
+              const isLocalMatch = localOrders.some(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id);
+              return emailMatch || phoneMatch || isLocalMatch;
+            });
+
+            combinedOrders = userDbOrders.map(dbOrder => {
               const matchedLocal = localOrders.find(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id);
               return {
                 id: dbOrder.order_number || dbOrder.id,
                 date: dbOrder.created_at,
-                customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
-                customerEmail: dbOrder.guest_email,
-                shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
-                delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
+                customerName: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer'),
+                customerEmail: dbOrder.guest_email || user.email,
+                customerPhone: dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : 'N/A'),
+                shippingAddress: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.raw_text : (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
                 total: dbOrder.final_total || 0,
-                items: matchedLocal ? matchedLocal.items : [], 
+                subtotal: dbOrder.total_mrp || dbOrder.final_total || 0,
+                shippingFee: dbOrder.shipping_charge || 0,
+                promoDiscount: dbOrder.discount_amount || 0,
+                items: matchedLocal && matchedLocal.items ? matchedLocal.items : [],
                 status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
               };
             });
-            const sorted = mappedOrders.sort((a,b) => new Date(b.date) - new Date(a.date));
-            setOrders(sorted);
-          } else {
-            // Fallback to local storage matching user's email
-            const localOrders = getOrders();
-            const userOrders = localOrders.filter(o => o.customerEmail === user.email);
-            setOrders(userOrders);
           }
+
+          // Add any local orders that match user's email or phone or are in local storage
+          localOrders.forEach(lo => {
+            if (!combinedOrders.some(co => co.id === lo.id)) {
+              combinedOrders.push(lo);
+            }
+          });
+
+          combinedOrders.sort((a,b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+          setOrders(combinedOrders);
         } catch (error) {
           console.error("Error fetching user data from Supabase", error);
+          setOrders(getOrders() || []);
         }
       } else {
-        // If logged out, load local wishlist if exists
         setOrders([]);
         const savedWishlist = localStorage.getItem("orient_wishlist");
         if (savedWishlist) {
