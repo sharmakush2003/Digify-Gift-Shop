@@ -207,9 +207,27 @@
 
 .erp-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.25rem;
   margin-top: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+  .erp-metrics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .erp-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .erp-metrics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .metric-card-pro {
@@ -306,17 +324,28 @@
   padding: 0 5% 100px;
 }
 
+.erp-tabs-container {
+  background: #111111;
+  padding: 8px;
+  border-radius: 16px;
+  margin-bottom: 25px;
+  display: inline-flex;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
 .erp-tabs {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 25px;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .erp-tabs .tab-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--glass-border);
-  color: var(--text-muted);
-  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  padding: 12px 20px;
   border-radius: 12px;
   cursor: pointer;
   font-family: 'Outfit', sans-serif;
@@ -326,6 +355,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  justify-content: center;
+  min-width: 160px;
 }
 
 .erp-tabs .tab-btn svg {
@@ -333,20 +365,20 @@
 }
 
 .erp-tabs .tab-btn:hover {
-  background: var(--bg-surface);
-  color: var(--text-main);
-  border-color: var(--primary);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 .erp-tabs .tab-btn.active {
-  background: var(--primary);
-  color: #000;
-  border-color: var(--primary);
-  box-shadow: 0 8px 20px rgba(197, 160, 89, 0.3);
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #ffffff;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .erp-tabs .tab-btn.active svg {
-  stroke: #000;
+  stroke: #0f172a;
 }
 
 .erp-content-box {

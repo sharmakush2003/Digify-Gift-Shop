@@ -466,8 +466,17 @@ export default function AdminPage() {
   const todayOrders = ordersList.filter(o => o.date && new Date(o.date).toDateString() === todayStr);
   const todayRevenue = todayOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
   
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const monthlyOrdersCount = ordersList.filter(o => {
+    if (!o.date) return false;
+    const d = new Date(o.date);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+  }).length;
+
   const totalOrdersCount = ordersList.length;
-  const activeOrdersCount = ordersList.filter(o => o.status !== "Delivered").length;
+  const activeDispatchesCount = ordersList.filter(o => o.status === "Shipped").length; // Shipped but not delivered
+  const pendingDispatchesCount = ordersList.filter(o => o.status === "Packed").length; // Packed but not shipped
   const pendingOrdersCount = ordersList.filter(o => o.status === "Pending").length;
   const lowStockCount = productsList.filter(p => p.stock < 5).length;
 
@@ -1076,23 +1085,110 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="erp-page" style={{ marginTop: "60px", minHeight: "100vh", backgroundColor: "var(--bg-main)", paddingBottom: "5rem" }}>
-      {/* Header Stats Bar */}
-      <div className="erp-dashboard-header" style={{ padding: "4rem 6% 2rem 6%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+    <div className="erp-page-wrapper" style={{ minHeight: "100vh", backgroundColor: "#f8fafc", margin: 0, padding: 0 }}>
+      <div className="erp-page" style={{ 
+        maxWidth: "1400px", 
+        margin: "0 auto", 
+        backgroundColor: "var(--bg-main)", 
+        minHeight: "100vh", 
+        borderLeft: "1px solid #cbd5e1", 
+        borderRight: "1px solid #cbd5e1", 
+        boxShadow: "0 0 40px rgba(0,0,0,0.03)",
+        position: "relative",
+        paddingBottom: "5rem"
+      }}>
+        {/* Support floating button */}
+        <div style={{
+          position: "fixed",
+          bottom: "30px",
+          right: "30px",
+          backgroundColor: "#111",
+          color: "#fff",
+          padding: "12px 20px",
+          borderRadius: "30px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+          zIndex: 999,
+          border: "1px solid #333"
+        }}>
+          <div style={{
+            backgroundColor: "#d4af37",
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#000",
+            fontSize: "0.9rem"
+          }}>
+            <i className="fa-solid fa-headset"></i>
+          </div>
           <div>
-            <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.5rem" }}>Orient Crockery Product Management System</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Operations Registry &bull; Local Storage Mode</p>
+            <div style={{ fontSize: "0.75rem", color: "#aaa", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>Developer Support</div>
+            <div style={{ fontSize: "0.9rem", fontWeight: "600", color: "#fff" }}><a href="tel:+917425016636" style={{ color: "inherit", textDecoration: "none" }}>+91 7425016636</a></div>
+            <div style={{ fontSize: "0.8rem", color: "#888" }}><a href="mailto:support@digifysoft.in" style={{ color: "inherit", textDecoration: "none" }}>support@digifysoft.in</a></div>
+          </div>
+        </div>
+
+      {/* Header Stats Bar */}
+      <div className="erp-dashboard-header" style={{ padding: "1.5rem 6% 2rem 6%" }}>
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center", 
+          marginBottom: "2.5rem",
+          background: "linear-gradient(to right, #ffffff, #fafafa)",
+          padding: "1.5rem 2rem",
+          borderRadius: "16px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.03)",
+          border: "1px solid #eaeaea",
+          borderLeft: "6px solid #d4af37",
+          borderRight: "6px solid #111"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+            <img 
+              src="/images/logo.jpg" 
+              alt="Orient Crockeries Logo" 
+              style={{ 
+                width: "65px", 
+                height: "65px", 
+                borderRadius: "12px", 
+                border: "1px solid #eaeaea", 
+                objectFit: "contain",
+                backgroundColor: "#fff",
+                padding: "2px"
+              }} 
+            />
+            <div>
+              <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.2rem", margin: 0, color: "#111", letterSpacing: "-0.5px" }}>
+                Orient Crockery <span style={{ color: "#d4af37" }}>Admin</span>
+              </h2>
+              <p style={{ color: "#64748b", margin: "4px 0 0 0", fontSize: "0.9rem", fontWeight: "600", letterSpacing: "1px", textTransform: "uppercase" }}>
+                Enterprise Product Management System
+              </p>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button 
-              className="btn btn-outline btn-sm" 
-              onClick={() => { playOrderChime(); triggerToast("🔔 Sound Alert Triggered!"); }}
-              style={{ borderColor: '#d97706', color: '#d97706' }}
-              title="Click once to enable browser sound playback"
-            >
-              <i className="fa-solid fa-bell"></i> Test Sound Chime
-            </button>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              backgroundColor: '#fffbeb', 
+              border: '1px solid #fef3c7', 
+              padding: '8px 12px', 
+              borderRadius: '8px', 
+              color: '#d97706', 
+              fontSize: '0.75rem', 
+              fontWeight: '600',
+              maxWidth: '280px',
+              lineHeight: '1.3'
+            }}>
+              <i className="fa-solid fa-bell-on"></i>
+              <span>New orders trigger sound notifications. Keep this panel open to receive them.</span>
+            </div>
             <button className="btn btn-outline btn-sm" onClick={handleLogout}>
               <i className="fa-solid fa-right-from-bracket"></i> Logout Portal
             </button>
@@ -1100,138 +1196,113 @@ export default function AdminPage() {
         </div>
 
         {/* Metric widgets grid */}
-        <div className="erp-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginTop: "1.5rem" }}>
+        <div className="erp-metrics-grid">
+          
           {/* Card 1: All-Time Revenue */}
           <div 
             className="metric-card-pro" 
             onClick={() => { setActiveTab("orders"); setOrderFilter("All"); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: (activeTab === "orders" && orderFilter === "All") ? "var(--primary)" : "#e2e8f0",
-              boxShadow: (activeTab === "orders" && orderFilter === "All") ? "0 4px 16px rgba(67, 24, 255, 0.15)" : "none"
-            }}
-            title="Click to view all order transactions"
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "All") ? "var(--primary)" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
               <span className="metric-card-title">All-Time Revenue</span>
-              <div className="metric-icon-avatar gold">
-                <i className="fa-solid fa-wallet"></i>
-              </div>
+              <div className="metric-icon-avatar gold"><i className="fa-solid fa-wallet"></i></div>
             </div>
             <div className="metric-card-value">₹{allTimeRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             <div className="metric-card-subtext">Cumulative cleared store sales</div>
           </div>
 
-          {/* Card 2: Today's Revenue */}
-          <div 
-            className="metric-card-pro" 
-            onClick={() => { setActiveTab("orders"); setOrderFilter("Today"); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: (activeTab === "orders" && orderFilter === "Today") ? "#059669" : "#e2e8f0",
-              boxShadow: (activeTab === "orders" && orderFilter === "Today") ? "0 4px 16px rgba(5, 150, 105, 0.15)" : "none"
-            }}
-            title="Click to view today's orders"
-          >
-            <div className="metric-card-header">
-              <span className="metric-card-title">Today's Revenue</span>
-              <div className="metric-icon-avatar green">
-                <i className="fa-solid fa-chart-line"></i>
-              </div>
-            </div>
-            <div className="metric-card-value">₹{todayRevenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="metric-card-subtext">{todayOrders.length} {todayOrders.length === 1 ? 'order' : 'orders'} placed today</div>
-          </div>
-
-          {/* Card 3: Total Orders Till Today */}
+          {/* Card 2: Total Orders (All Time) */}
           <div 
             className="metric-card-pro" 
             onClick={() => { setActiveTab("orders"); setOrderFilter("All"); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: (activeTab === "orders" && orderFilter === "All") ? "#2563eb" : "#e2e8f0",
-              boxShadow: (activeTab === "orders" && orderFilter === "All") ? "0 4px 16px rgba(37, 99, 235, 0.15)" : "none"
-            }}
-            title="Click to view total orders list"
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "All") ? "#2563eb" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
-              <span className="metric-card-title">Total Orders</span>
-              <div className="metric-icon-avatar blue">
-                <i className="fa-solid fa-boxes-stacked"></i>
-              </div>
+              <span className="metric-card-title">All-Time Total Orders</span>
+              <div className="metric-icon-avatar blue"><i className="fa-solid fa-boxes-stacked"></i></div>
             </div>
             <div className="metric-card-value">{totalOrdersCount}</div>
             <div className="metric-card-subtext">Lifetime customer transactions</div>
           </div>
 
-          {/* Card 4: Active Orders */}
+          {/* Card 3: Today's Orders */}
           <div 
             className="metric-card-pro" 
-            onClick={() => { setActiveTab("orders"); setOrderFilter("Active"); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: (activeTab === "orders" && orderFilter === "Active") ? "#4f46e5" : "#e2e8f0",
-              boxShadow: (activeTab === "orders" && orderFilter === "Active") ? "0 4px 16px rgba(79, 70, 229, 0.15)" : "none"
-            }}
-            title="Click to view active dispatches"
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Today"); }}
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Today") ? "#059669" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
-              <span className="metric-card-title">Active Dispatches</span>
-              <div className="metric-icon-avatar indigo">
-                <i className="fa-solid fa-truck-fast"></i>
-              </div>
+              <span className="metric-card-title">Today's Total Orders</span>
+              <div className="metric-icon-avatar green"><i className="fa-solid fa-calendar-day"></i></div>
             </div>
-            <div className="metric-card-value">{activeOrdersCount}</div>
-            <div className="metric-card-subtext">In packing &amp; dispatch queue</div>
+            <div className="metric-card-value">{todayOrders.length}</div>
+            <div className="metric-card-subtext">Orders placed today</div>
+          </div>
+
+          {/* Card 4: Monthly Orders */}
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); }}
+            style={{ cursor: "pointer", borderColor: "#e2e8f0" }}
+          >
+            <div className="metric-card-header">
+              <span className="metric-card-title">Monthly Total Orders</span>
+              <div className="metric-icon-avatar" style={{ backgroundColor: "#f3e8ff", color: "#9333ea" }}><i className="fa-solid fa-calendar-days"></i></div>
+            </div>
+            <div className="metric-card-value">{monthlyOrdersCount}</div>
+            <div className="metric-card-subtext">Orders placed this month</div>
           </div>
 
           {/* Card 5: Pending Orders */}
           <div 
             className="metric-card-pro" 
             onClick={() => { setActiveTab("orders"); setOrderFilter("Pending"); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: (activeTab === "orders" && orderFilter === "Pending") ? "#ea580c" : "#e2e8f0",
-              boxShadow: (activeTab === "orders" && orderFilter === "Pending") ? "0 4px 16px rgba(234, 88, 12, 0.15)" : "none"
-            }}
-            title="Click to view pending orders"
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Pending") ? "#ea580c" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
               <span className="metric-card-title">Pending Orders</span>
-              <div className="metric-icon-avatar amber">
-                <i className="fa-solid fa-clock-rotate-left"></i>
-              </div>
+              <div className="metric-icon-avatar amber"><i className="fa-solid fa-clock-rotate-left"></i></div>
             </div>
             <div className="metric-card-value">{pendingOrdersCount}</div>
             <div className="metric-card-subtext">Awaiting admin processing</div>
           </div>
 
-          {/* Card 6: Low Stock Items */}
+          {/* Card 6: Pending Dispatches (Packed) */}
           <div 
             className="metric-card-pro" 
-            onClick={() => { setActiveTab("inventory"); setInventorySearch(""); }}
-            style={{ 
-              cursor: "pointer", 
-              borderColor: activeTab === "inventory" ? "#dc2626" : "#e2e8f0",
-              boxShadow: activeTab === "inventory" ? "0 4px 16px rgba(220, 38, 38, 0.15)" : "none"
-            }}
-            title="Click to open inventory registry"
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Packed"); }}
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Packed") ? "#f59e0b" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
-              <span className="metric-card-title">Low Stock Alert</span>
-              <div className={`metric-icon-avatar ${lowStockCount > 0 ? 'red' : 'green'}`}>
-                <i className="fa-solid fa-triangle-exclamation"></i>
-              </div>
+              <span className="metric-card-title">Pending Dispatches</span>
+              <div className="metric-icon-avatar" style={{ backgroundColor: "#fef3c7", color: "#d97706" }}><i className="fa-solid fa-box"></i></div>
             </div>
-            <div className="metric-card-value" style={{ color: lowStockCount > 0 ? "#dc2626" : "inherit" }}>{lowStockCount}</div>
-            <div className="metric-card-subtext">Products below 5 units stock</div>
+            <div className="metric-card-value">{pendingDispatchesCount}</div>
+            <div className="metric-card-subtext">Packed, waiting for pickup</div>
           </div>
+
+          {/* Card 7: Active Dispatches (Shipped) */}
+          <div 
+            className="metric-card-pro" 
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Shipped"); }}
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Shipped") ? "#4f46e5" : "#e2e8f0" }}
+          >
+            <div className="metric-card-header">
+              <span className="metric-card-title">Active Dispatches</span>
+              <div className="metric-icon-avatar indigo"><i className="fa-solid fa-truck-fast"></i></div>
+            </div>
+            <div className="metric-card-value">{activeDispatchesCount}</div>
+            <div className="metric-card-subtext">Currently in transit</div>
+          </div>
+
         </div>
       </div>
 
       <div className="erp-main-section" style={{ padding: "0 6%" }}>
         {/* Tabs list */}
-        <div className="erp-tabs" style={{ display: "flex", gap: "1rem", marginBottom: "25px", flexWrap: "wrap" }}>
+        <div className="erp-tabs-container">
+          <div className="erp-tabs">
           <button 
             className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
             onClick={() => setActiveTab("orders")}
@@ -1262,6 +1333,7 @@ export default function AdminPage() {
           >
             <i className="fa-solid fa-book-open"></i> Help & Instructions
           </button>
+          </div>
         </div>
 
         {/* Tab 1: Orders Queue */}
@@ -1343,7 +1415,7 @@ export default function AdminPage() {
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #e2e8f0', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '6px' }}>Filter Status:</span>
                 {[
-                  { label: "Active Dispatches", value: "Active", icon: "fa-truck-fast", count: activeOrdersCount },
+                  { label: "Active Dispatches", value: "Active", icon: "fa-truck-fast", count: activeDispatchesCount },
                   { label: "Pending", value: "Pending", icon: "fa-clock-rotate-left", count: pendingOrdersCount },
                   { label: "Packed", value: "Packed", icon: "fa-box", count: ordersList.filter(o => o.status === "Packed").length },
                   { label: "Shipped", value: "Shipped", icon: "fa-paper-plane", count: ordersList.filter(o => o.status === "Shipped").length },
@@ -2508,6 +2580,7 @@ export default function AdminPage() {
         >
           &times;
         </button>
+      </div>
       </div>
     </div>
   );
