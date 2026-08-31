@@ -51,7 +51,7 @@ export default function Navbar() {
     };
   }, []);
 
-  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery'))) {
+  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery') || pathname.startsWith('/reset-password') || pathname.startsWith('/auth/verify'))) {
     return null;
   }
 

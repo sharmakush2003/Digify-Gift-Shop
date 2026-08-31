@@ -23,7 +23,7 @@ export default function PromoOfferModal() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [toastMessage, setToastMessage] = useState("");
 
-  const isAdminOrDelivery = pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery'));
+  const isAdminOrDelivery = pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery') || pathname.startsWith('/reset-password') || pathname.startsWith('/auth/verify'));
 
   const loadConfig = () => {
     try {
