@@ -13,15 +13,28 @@ export default function Footer() {
   return (
     <footer className="luxury-footer">
       <div className="footer-top-accent"></div>
+      
+      {/* Newsletter Section */}
+      <div className="footer-newsletter-section">
+        <div className="newsletter-content">
+          <h3 className="newsletter-title">Join Maison Orient</h3>
+          <p className="newsletter-desc">Subscribe to receive exclusive offers, new arrival updates, and insider-only privileges.</p>
+          <form className="newsletter-form" onSubmit={(e) => e.preventDefault()}>
+            <input type="email" placeholder="Enter your email address" className="newsletter-input" required />
+            <button type="submit" className="newsletter-btn">Subscribe</button>
+          </form>
+        </div>
+      </div>
+
       <div className="footer-container">
         <div className="footer-grid luxury-footer-grid">
           
           {/* Brand Column */}
           <div className="footer-brand-col">
             <div className="footer-logo-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px' }}>
-              <Image src="/images/logo.jpg" alt="Orient Crockeries Logo" width={60} height={60} style={{ objectFit: 'contain' }} />
+              <Image src="/images/logo.jpg" alt="Orient Crockeries Logo" width={65} height={65} style={{ objectFit: 'contain', borderRadius: '4px' }} />
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span className="footer-logo" style={{ fontSize: '1.5rem', letterSpacing: '2px', whiteSpace: 'nowrap' }}>Orient Crockeries</span>
+                <span className="footer-logo" style={{ fontSize: '1.6rem', letterSpacing: '2px', whiteSpace: 'nowrap' }}>Orient Crockeries</span>
               </div>
             </div>
             <p className="footer-brand-desc">
@@ -37,30 +50,34 @@ export default function Footer() {
               <a href="#" className="social-icon" aria-label="Pinterest">
                 <i className="fa-brands fa-pinterest-p"></i>
               </a>
+              <a href="#" className="social-icon" aria-label="YouTube">
+                <i className="fa-brands fa-youtube"></i>
+              </a>
             </div>
           </div>
 
           {/* Navigation Columns */}
-          <div className="footer-nav-col">
-            <h4 className="footer-heading">Collections</h4>
-            <ul className="footer-links">
-              <li><Link href="/catalog?department=Crockery+%26+Dining">Fine Dining</Link></li>
-              <li><Link href="/catalog?department=Cookware">Professional Cookware</Link></li>
-              <li><Link href="/catalog?department=Woodcraft">Organic Woodcraft</Link></li>
-              <li><Link href="/catalog?category=Gift+Sets">Bespoke Gifting</Link></li>
-            </ul>
-          </div>
+          <div className="footer-nav-wrapper">
+            <div className="footer-nav-col">
+              <h4 className="footer-heading">Collections</h4>
+              <ul className="footer-links">
+                <li><Link href="/catalog?department=Crockery+%26+Dining">Fine Dining</Link></li>
+                <li><Link href="/catalog?department=Cookware">Professional Cookware</Link></li>
+                <li><Link href="/catalog?department=Woodcraft">Organic Woodcraft</Link></li>
+                <li><Link href="/catalog?category=Gift+Sets">Bespoke Gifting</Link></li>
+              </ul>
+            </div>
 
-          <div className="footer-nav-col">
-            <h4 className="footer-heading">Maison Orient</h4>
-            <ul className="footer-links">
-              <li><Link href="/about">Our Heritage</Link></li>
-              <li><Link href="/care">Care & Maintenance</Link></li>
-              <li><Link href="/contact">Concierge Services</Link></li>
-              <li><Link href="/delivery">Shipping & Returns</Link></li>
-            </ul>
+            <div className="footer-nav-col">
+              <h4 className="footer-heading">Maison Orient</h4>
+              <ul className="footer-links">
+                <li><Link href="/about">Our Heritage</Link></li>
+                <li><Link href="/care">Care &amp; Maintenance</Link></li>
+                <li><Link href="/contact">Concierge Services</Link></li>
+                <li><Link href="/delivery">Shipping &amp; Returns</Link></li>
+              </ul>
+            </div>
           </div>
-
         </div>
 
         <div className="footer-bottom-bar">
