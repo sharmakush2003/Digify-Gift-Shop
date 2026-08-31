@@ -3610,3 +3610,26 @@ footer {
   }
 }
 
+/* Header mobile adjustments */
+@media (max-width: 768px) {
+  .auth-text {
+    display: none !important;
+  }
+  .nav-auth-pill {
+    padding: 8px !important;
+    border-radius: 50% !important;
+  }
+  .nav-right-group {
+    gap: 8px !important;
+  }
+  .nav-user-group {
+    padding: 4px;
+    gap: 4px;
+  }
+  .nav-account-text {
+    display: none !important;
+  }
+  .nav-account-btn {
+    padding: 4px;
+  }
+}
