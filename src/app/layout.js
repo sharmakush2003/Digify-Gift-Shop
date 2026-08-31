@@ -6,6 +6,7 @@ import { AppProvider } from "./context/AppContext";
 import { AuthProvider } from "./context/AuthContext";
 import LoginModal from "./components/LoginModal";
 import PromoOfferModal from "./components/PromoOfferModal";
+import FloatingCart from "./components/FloatingCart";
 
 export const metadata = {
   title: "Orient Crockeries | Premium Hospitality & Dining Solutions",
@@ -45,6 +46,7 @@ export default function RootLayout({ children }) {
             <PromoOfferModal />
             {children}
             <Footer />
+            <FloatingCart />
           </AppProvider>
         </AuthProvider>
         <Script
