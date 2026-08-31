@@ -27,12 +27,23 @@
   box-sizing: border-box;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden !important;
+  position: relative;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  box-sizing: border-box;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-main);
   color: var(--text-main);
   line-height: 1.6;
-  overflow-x: hidden;
   font-size: 0.95rem;
   letter-spacing: 0.2px;
 }
@@ -103,7 +114,10 @@ header.site-header {
   top: 0;
   left: 0;
   width: 100%;
+  max-width: 100vw;
   z-index: 1000;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .top-announcement-bar {
@@ -120,12 +134,17 @@ header.site-header {
   justify-content: center;
   align-items: center;
   gap: 12px;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .top-announcement-bar span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
 }
 
 .announcement-divider {
@@ -135,9 +154,39 @@ header.site-header {
 }
 
 @media (max-width: 768px) {
+  header.site-header {
+    width: 100vw;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+  .top-announcement-bar {
+    padding: 5px 8px;
+    font-size: 0.63rem;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
   .top-announcement-bar .announcement-divider,
   .top-announcement-bar span:last-child {
     display: none;
+  }
+  .top-announcement-bar span:first-child {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tracking-search-form {
+    flex-direction: column;
+  }
+  .tracking-submit-btn {
+    width: 100%;
   }
 }
 
@@ -1949,30 +1998,39 @@ footer {
 
 @media (max-width: 768px) {
   .container {
-    padding: 6rem 1rem 3rem 1rem;
+    padding: 2rem 1rem 3rem 1rem;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
   .page-title {
     font-size: 2rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
   }
   .cart-layout {
     gap: 1.5rem;
   }
   .cart-summary-box {
     padding: 1.5rem 1rem;
+    box-sizing: border-box;
   }
   .checkout-card {
-    padding: 1.5rem 1rem;
+    padding: 1.2rem 1rem;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
   }
   .form-grid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: 1.2rem;
   }
   .form-group.full-width {
     grid-column: span 1;
   }
   .invoice-container {
     padding: 1.5rem 1rem;
+    box-sizing: border-box;
   }
   .invoice-header {
     flex-direction: column;

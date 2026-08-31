@@ -90,18 +90,18 @@ function TrackingContent() {
 
       {/* Search Order bar */}
       <div className="checkout-card" style={{ marginBottom: "3rem" }}>
-        <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: "10px" }}>
-          <div style={{ flexGrow: 1, position: "relative" }}>
+        <form onSubmit={handleSearchSubmit} className="tracking-search-form">
+          <div style={{ flexGrow: 1, position: "relative", minWidth: 0 }}>
             <i className="fa-solid fa-barcode search-icon-inside"></i>
             <input 
               type="text" 
               className="search-input" 
-              placeholder="Enter your Order Reference Number (e.g. ORD-123456)" 
+              placeholder="Enter Order Reference (e.g. ORD-123456)" 
               value={orderIdInput}
               onChange={(e) => setOrderIdInput(e.target.value)}
             />
           </div>
-          <button type="submit" className="btn btn-primary" style={{ padding: "0.6rem 2rem" }}>
+          <button type="submit" className="btn btn-primary tracking-submit-btn">
             Track Order
           </button>
         </form>
