@@ -91,6 +91,7 @@ export default function CheckoutPage() {
       return;
     }
     setCheckoutPhase("payment_selection");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleAutoDetect = async () => {
@@ -136,9 +137,9 @@ export default function CheckoutPage() {
   };
 
 
-  const simulatePayment = async () => {
+  const handleCOD = async () => {
     setCheckoutPhase("paying");
-    setPaymentStatus("Initializing Secure Payment Interface...");
+    setPaymentStatus("Processing Cash on Delivery Order...");
     
     // Call our secure backend to create order in DB
     try {
@@ -161,24 +162,9 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
-      setPaymentStatus("Authenticating Payment Details...");
       setTimeout(() => {
-        setPaymentStatus("Recording transaction and generating invoice...");
-        // Mock verification
-        fetch("/api/payment/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            razorpay_order_id: data.razorpayOrderId, 
-            razorpay_payment_id: "pay_mock_" + Math.random().toString(36).substr(2, 9), 
-            razorpay_signature: "mock_signature", 
-            order_db_id: data.order.id 
-          })
-        }).then(() => {
-          completeOrder(data.order);
-        }).catch(() => {
-          completeOrder(data.order);
-        });
+        setPaymentStatus("Order Confirmed!");
+        completeOrder(data.order, "COD");
       }, 1500);
     } catch (err) {
       alert("Checkout failed: " + err.message);
@@ -213,7 +199,7 @@ export default function CheckoutPage() {
       
       if (!order.success) {
         console.warn("Backend order creation failed.", order.message);
-        simulatePayment(); // Auto fallback to mock payment for demo
+        handleCOD(); // Auto fallback to COD for demo
         return;
       }
       
@@ -262,12 +248,12 @@ export default function CheckoutPage() {
       });
       rzp1.open();
     } catch (err) {
-      console.warn("Razorpay init failed, falling back to mock payment simulation.", err);
-      simulatePayment();
+      console.warn("Razorpay init failed, falling back to COD simulation.", err);
+      handleCOD();
     }
   };
 
-  const completeOrder = async (backendOrderData = null) => {
+  const completeOrder = async (backendOrderData = null, method = "Online") => {
     // If backend order exists, use it, else fallback to mock structure
     const fallbackOrderId = "ORD-" + Math.floor(Math.random() * 900000 + 100000);
     const orderData = backendOrderData ? {
@@ -283,11 +269,10 @@ export default function CheckoutPage() {
       shipping: backendOrderData.shipping_charge || shippingFee,
       discount: backendOrderData.discount_amount || promoDiscount,
       total: backendOrderData.final_total || orderTotal,
-      gstAmount: backendOrderData.tax_amount || totalGST,
       status: "Pending",
       courierStatus: "In Warehouse",
-      paymentStatus: "Paid",
-      paymentId: backendOrderData.payment_reference_id
+      paymentStatus: method === "COD" ? "Pending (COD)" : "Paid",
+      paymentId: method === "COD" ? "COD" : backendOrderData.payment_reference_id
     } : {
       id: fallbackOrderId,
       order_number: fallbackOrderId,
@@ -304,8 +289,8 @@ export default function CheckoutPage() {
       gstAmount: totalGST,
       status: "Pending",
       courierStatus: "In Warehouse",
-      paymentStatus: "Paid",
-      paymentId: "pay_" + Math.random().toString(36).substr(2, 9)
+      paymentStatus: method === "COD" ? "Pending (COD)" : "Paid",
+      paymentId: method === "COD" ? "COD" : "pay_" + Math.random().toString(36).substr(2, 9)
     };
 
     // Always save locally so fallback & UI work immediately
@@ -313,6 +298,7 @@ export default function CheckoutPage() {
     setCreatedOrder(orderData);
     setCheckoutPhase("receipt");
     clearCart();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Trigger Google Sheets Webhook
     try {
@@ -534,9 +520,9 @@ export default function CheckoutPage() {
               type="button"
               className="btn" 
               onClick={handleProceedToPayment}
-              style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.2rem", fontSize: "1.1rem", marginTop: "2rem" }}
+              style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.3rem", fontSize: "1.1rem", marginTop: "2rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", borderRadius: "8px", boxShadow: "0 8px 20px rgba(184, 134, 11, 0.3)", border: "none", cursor: "pointer", transition: "transform 0.2s ease" }}
             >
-              Proceed to Payment
+              <i className="fa-solid fa-lock" style={{ fontSize: "1.2rem" }}></i> PROCEED TO PAYMENT
             </button>
           </div>
 
@@ -593,7 +579,7 @@ export default function CheckoutPage() {
 
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem" }}>
                 <span style={{ color: "#555" }}>Shipping Fee</span>
-                <span style={{ fontWeight: "600" }}>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</span>
+                <span style={{ fontWeight: "600", fontSize: "0.75rem", textAlign: "right", maxWidth: "60%" }}>{shippingFee === 0 ? "Will be communicated with you after the order" : `₹${shippingFee.toFixed(2)}`}</span>
               </div>
             </div>
 
@@ -643,13 +629,20 @@ export default function CheckoutPage() {
             <h3 style={{ fontSize: "3rem", fontFamily: "var(--font-serif)", color: "#111111", margin: "0", fontWeight: "700" }}>₹{orderTotal.toFixed(2)}</h3>
           </div>
           
-          <button onClick={initializeRazorpay} className="btn" style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.3rem", fontSize: "1.1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", borderRadius: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", boxShadow: "0 8px 20px rgba(184, 134, 11, 0.3)", border: "none", cursor: "pointer", transition: "transform 0.2s ease" }}>
-            <i className="fa-solid fa-lock" style={{ fontSize: "1.2rem" }}></i> PROCEED TO PAY SECURELY
-          </button>
-
-          <button onClick={simulatePayment} className="btn btn-outline" style={{ width: "100%", padding: "1rem", marginTop: "1rem", fontSize: "0.9rem", color: "#888", border: "1px dashed #ccc", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", borderRadius: "8px", cursor: "pointer" }}>
-            <i className="fa-solid fa-flask"></i> Skip Payment (Test Mode)
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <button onClick={initializeRazorpay} className="btn" style={{ background: "var(--primary)", color: "white", width: "100%", padding: "1.3rem", fontSize: "1.1rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", borderRadius: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", boxShadow: "0 8px 20px rgba(184, 134, 11, 0.3)", border: "none", cursor: "pointer", transition: "transform 0.2s ease" }}>
+              <i className="fa-solid fa-credit-card" style={{ fontSize: "1.2rem" }}></i> PAY ONLINE (RAZORPAY)
+            </button>
+  
+            <div style={{ position: "relative", margin: "1rem 0" }}>
+              <div style={{ borderTop: "1px solid #e0e0e0" }}></div>
+              <span style={{ position: "absolute", top: "-12px", left: "50%", transform: "translateX(-50%)", background: "#ffffff", padding: "0 15px", color: "#888", fontSize: "0.9rem", fontWeight: "600" }}>OR</span>
+            </div>
+  
+            <button onClick={handleCOD} className="btn btn-outline" style={{ background: "#f8f9fa", color: "var(--dark)", width: "100%", padding: "1.3rem", fontSize: "1.1rem", border: "2px solid #e0e0e0", display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", borderRadius: "8px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", cursor: "pointer", transition: "all 0.2s ease" }}>
+              <i className="fa-solid fa-money-bill-wave" style={{ fontSize: "1.2rem", color: "#28a745" }}></i> CASH ON DELIVERY (COD)
+            </button>
+          </div>
           
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "20px", marginTop: "2rem", color: "#666666", fontSize: "1.2rem" }}>
             <i className="fa-brands fa-cc-visa" title="Visa"></i>
@@ -676,26 +669,15 @@ export default function CheckoutPage() {
 
       {/* Tax Invoice Printable Receipt */}
       {checkoutPhase === "receipt" && createdOrder && (
-        <div style={{ textAlign: "center", padding: "4rem 2rem", background: "var(--bg-surface)", border: "1px solid var(--border)", maxWidth: "600px", margin: "0 auto", borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.05)" }}>
-          <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "rgba(212, 175, 55, 0.1)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 2rem", fontSize: "3rem" }}>
+        <div style={{ textAlign: "center", padding: "4rem 2rem", background: "linear-gradient(to bottom, #fffcf5, #ffffff)", border: "1px solid #d4af37", maxWidth: "650px", margin: "2rem auto", borderRadius: "16px", boxShadow: "0 20px 40px rgba(212, 175, 55, 0.15)" }}>
+          <div style={{ width: "90px", height: "90px", borderRadius: "50%", background: "linear-gradient(135deg, #d4af37 0%, #b8860b 100%)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 2rem", fontSize: "3.5rem", boxShadow: "0 10px 20px rgba(184, 134, 11, 0.3)" }}>
             <i className="fa-solid fa-check"></i>
           </div>
-          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2rem", marginBottom: "1rem", color: "var(--dark)" }}>Payment Successful!</h2>
-          <p style={{ color: "var(--text-muted)", fontSize: "1.1rem", marginBottom: "2rem", lineHeight: "1.6" }}>
-            Thank you for your purchase. Your order <b>{createdOrder.id}</b> is being processed for shipping.
+          <h2 style={{ fontFamily: "var(--font-serif)", fontSize: "2.5rem", marginBottom: "1rem", color: "#111", letterSpacing: "1px" }}>Payment Successful!</h2>
+          <p style={{ color: "#555", fontSize: "1.1rem", marginBottom: "2.5rem", lineHeight: "1.6" }}>
+            Thank you for your purchase. Your order <b style={{ color: "var(--primary)" }}>{createdOrder.id}</b> has been received and is being processed for shipping.
           </p>
           
-          <div style={{ background: "#fff9e6", padding: "1.5rem", borderRadius: "8px", border: "1px dashed var(--primary)", marginBottom: "2rem", textAlign: "left" }}>
-            <h4 style={{ color: "var(--dark)", marginTop: 0, marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "8px" }}>
-              <i className="fa-solid fa-truck-fast" style={{ color: "var(--primary)" }}></i> Delivery Information
-            </h4>
-            <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.95rem", lineHeight: "1.5" }}>
-              Once your order is shipped, a secure <b>Delivery OTP</b> will be generated. You will need to show this OTP to the delivery executive to receive your package. 
-              <br /><br />
-              If you close this application, you can always view your OTP later by going to <b>My Account &gt; View Past History</b>.
-            </p>
-          </div>
-
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
             <button 
               type="button"
@@ -707,22 +689,29 @@ export default function CheckoutPage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "0.8rem 1.6rem",
-                borderRadius: "6px",
-                fontWeight: "600"
+                padding: "1rem 1.8rem",
+                borderRadius: "8px",
+                fontWeight: "700",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                border: "none",
+                boxShadow: "0 4px 15px rgba(212, 175, 55, 0.3)",
+                transition: "transform 0.2s"
               }}
             >
-              <i className="fa-solid fa-file-pdf"></i> Download Official Tax Invoice (PDF)
+              <i className="fa-solid fa-file-pdf"></i> Download Official Tax Invoice
             </button>
             <Link 
               href="/account" 
               className="btn btn-outline"
+              style={{ padding: "1rem 1.8rem", borderRadius: "8px", fontWeight: "600" }}
             >
               View Past History
             </Link>
             <Link 
               href="/" 
               className="btn btn-outline"
+              style={{ padding: "1rem 1.8rem", borderRadius: "8px", fontWeight: "600" }}
             >
               Continue Shopping
             </Link>

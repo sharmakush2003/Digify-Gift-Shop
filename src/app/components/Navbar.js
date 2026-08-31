@@ -113,11 +113,8 @@ export default function Navbar() {
         <ul className={`nav-links ${mobileActive ? 'active' : ''}`} id="nav-links-menu">
           <li className="nav-mobile-only menu-header-container">
             <div className="logo-container">
-              <div className="logo-badge-wrapper" style={{ width: '34px', height: '34px' }}>
-                <Image src="/images/logo.jpg" alt="Orient Crockeries" width={30} height={30} style={{ objectFit: 'contain' }} />
-              </div>
-              <div className="logo-text-block">
-                <span className="logo-title" style={{ fontSize: '1.2rem' }}>Orient Crockeries</span>
+              <div className="logo-badge-wrapper" style={{ width: '40px', height: '40px' }}>
+                <Image src="/images/logo.jpg" alt="Orient Crockeries" width={40} height={40} style={{ objectFit: 'contain' }} />
               </div>
             </div>
             <button 
@@ -132,20 +129,27 @@ export default function Navbar() {
             </button>
           </li>
           
-          {navLinks.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
-            return (
-              <li key={item.href}>
-                <Link 
-                  href={item.href} 
-                  className={`nav-item-link ${isActive ? 'active' : ''}`}
-                  onClick={closeDrawer}
-                >
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
+          <li>
+            <Link href="/" className={`nav-item-link ${pathname === '/' ? 'active' : ''}`} onClick={closeDrawer}>Home</Link>
+          </li>
+          <li className="nav-dropdown-wrapper">
+            <div className={`nav-item-link ${pathname?.startsWith('/catalog') ? 'active' : ''}`} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Link href="/catalog" onClick={closeDrawer} style={{ flex: 1 }}>Shop Dining</Link>
+              <i className="fa-solid fa-chevron-down dropdown-icon"></i>
+            </div>
+            <ul className="nav-dropdown-menu">
+              <li><Link href="/catalog?department=Crockery+%26+Dining" onClick={closeDrawer}>Fine Dining</Link></li>
+              <li><Link href="/catalog?department=Cookware" onClick={closeDrawer}>Professional Cookware</Link></li>
+              <li><Link href="/catalog?department=Woodcraft" onClick={closeDrawer}>Organic Woodcraft</Link></li>
+              <li><Link href="/catalog?category=Gift+Sets" onClick={closeDrawer}>Bespoke Gifting</Link></li>
+            </ul>
+          </li>
+          <li>
+            <Link href="/contact" className={`nav-item-link ${pathname === '/contact' ? 'active' : ''}`} onClick={closeDrawer}>Contact</Link>
+          </li>
+          <li>
+            <Link href="/account" className={`nav-item-link ${pathname === '/account' ? 'active' : ''}`} onClick={closeDrawer}>My Account</Link>
+          </li>
         </ul>
 
         {/* Header Right Action Group */}

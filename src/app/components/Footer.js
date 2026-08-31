@@ -14,17 +14,6 @@ export default function Footer() {
     <footer className="luxury-footer">
       <div className="footer-top-accent"></div>
       
-      {/* Newsletter Section */}
-      <div className="footer-newsletter-section">
-        <div className="newsletter-content">
-          <h3 className="newsletter-title">Join Maison Orient</h3>
-          <p className="newsletter-desc">Subscribe to receive exclusive offers, new arrival updates, and insider-only privileges.</p>
-          <form className="newsletter-form" onSubmit={(e) => e.preventDefault()}>
-            <input type="email" placeholder="Enter your email address" className="newsletter-input" required />
-            <button type="submit" className="newsletter-btn">Subscribe</button>
-          </form>
-        </div>
-      </div>
 
       <div className="footer-container">
         <div className="footer-grid luxury-footer-grid">
@@ -68,25 +57,12 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div className="footer-nav-col">
-              <h4 className="footer-heading">Maison Orient</h4>
-              <ul className="footer-links">
-                <li><Link href="/about">Our Heritage</Link></li>
-                <li><Link href="/care">Care &amp; Maintenance</Link></li>
-                <li><Link href="/contact">Concierge Services</Link></li>
-                <li><Link href="/delivery">Shipping &amp; Returns</Link></li>
-              </ul>
-            </div>
           </div>
         </div>
 
         <div className="footer-bottom-bar">
           <div className="footer-bottom-links">
             <a href="#">Privacy Policy</a>
-            <span className="separator">&bull;</span>
-            <a href="#">Terms of Service</a>
-            <span className="separator">&bull;</span>
-            <a href="#">Cookie Preferences</a>
           </div>
           <div className="footer-copyright">
             &copy; {new Date().getFullYear()} Orient Crockeries. Developed by <span>Digify Soft Solutions</span>

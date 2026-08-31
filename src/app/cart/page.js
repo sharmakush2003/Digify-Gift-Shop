@@ -93,12 +93,12 @@ export default function CartPage() {
   // Total Combined Discount
   const totalDiscount = promoDiscount + voucherDiscount;
 
-  // Final Total
-  const finalTotal = Math.max(0, cartSubtotal - totalDiscount + shippingFee);
+  // Final Total (Shipping calculated at checkout)
+  const finalTotal = Math.max(0, cartSubtotal - totalDiscount);
 
   const handleCheckout = () => {
     // Save checkout calculations to localStorage to pass to checkout page
-    localStorage.setItem("orient_checkout_shipping", shippingFee.toString());
+    localStorage.setItem("orient_checkout_shipping", "0"); // Will be calculated on checkout page
     localStorage.setItem("orient_checkout_loyalty_disc", "0");
     localStorage.setItem("orient_checkout_promo_disc", totalDiscount.toString());
     localStorage.setItem("orient_checkout_promo_code", promoApplied ? (voucherApplied ? `${promoApplied}, ${voucherApplied}` : promoApplied) : voucherApplied);
@@ -198,10 +198,10 @@ export default function CartPage() {
 
             <div className="summary-row">
               <span>Shipping Fee</span>
-              <span>{shippingFee === 0 ? <span style={{ color: "var(--success)" }}>FREE</span> : `₹${shippingFee.toFixed(2)}`}</span>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "500", textAlign: "right", maxWidth: "60%" }}>Will be communicated with you after the order</span>
             </div>
 
-            <div className="summary-row total-row">
+            <div className="summary-row total-row" style={{ marginBottom: '1.5rem' }}>
               <span>Estimated Total</span>
               <span>₹{finalTotal.toFixed(2)}</span>
             </div>

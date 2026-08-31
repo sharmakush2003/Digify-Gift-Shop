@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { generateInvoicePDF } from '../utils/invoiceGenerator';
 import Link from 'next/link';
+import { supabase } from '../../supabase';
 
 export default function AccountPage() {
   const { user, loading, logout } = useAuth();
@@ -13,6 +14,11 @@ export default function AccountPage() {
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [viewingOrders, setViewingOrders] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  
+
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -53,9 +59,35 @@ export default function AccountPage() {
   };
 
   const userInitial = user?.displayName ? String(user.displayName).charAt(0).toUpperCase() : (user?.email ? String(user.email).charAt(0).toUpperCase() : 'M');
-  const userName = user?.displayName || 'Orient Patron';
+  const userName = user?.user_metadata?.full_name || user?.displayName || 'Orient Patron';
   const userEmail = user?.email || 'N/A';
   const joinedDate = user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Member';
+
+  const handleEditProfile = () => {
+    setEditName(userName);
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) return triggerToast("Name cannot be empty.");
+    setIsSaving(true);
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        data: { full_name: editName.trim() }
+      });
+      if (error) throw error;
+      
+      // Also update in public users table
+      await supabase.from('users').update({ full_name: editName.trim() }).eq('id', user.id);
+      
+      triggerToast("Profile updated successfully!");
+      setIsEditingProfile(false);
+    } catch (err) {
+      triggerToast("Failed to update profile: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="account-page-wrapper">
@@ -111,20 +143,47 @@ export default function AccountPage() {
               </div>
               
               <div className="profile-details-list">
-                <div className="detail-item">
-                  <span className="detail-label">Full Name</span>
-                  <span className="detail-val">{userName}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Email Address</span>
-                  <span className="detail-val">{userEmail}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Account Status</span>
-                  <span className="status-pill-verified">
-                    <i className="fa-solid fa-circle-check"></i> Verified Member
-                  </span>
-                </div>
+                {isEditingProfile ? (
+                  <div className="detail-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
+                    <span className="detail-label">Full Name</span>
+                    <input 
+                      type="text" 
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
+                    />
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+                      <button onClick={handleSaveProfile} disabled={isSaving} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                        {isSaving ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button onClick={() => setIsEditingProfile(false)} disabled={isSaving} className="btn btn-outline" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="detail-item">
+                      <span className="detail-label">Full Name</span>
+                      <span className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {userName} 
+                        <button onClick={handleEditProfile} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title="Edit Name">
+                          <i className="fa-solid fa-pen-to-square"></i> Edit
+                        </button>
+                      </span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Email Address</span>
+                      <span className="detail-val">{userEmail}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Account Status</span>
+                      <span className="status-pill-verified">
+                        <i className="fa-solid fa-circle-check"></i> Verified Member
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
