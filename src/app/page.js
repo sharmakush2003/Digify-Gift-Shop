@@ -168,12 +168,12 @@ export default function Home() {
           <h2 className="section-title">Shop The Look</h2>
         </div>
         <div className="shop-the-look-container">
-          <Image src="/images/shop_the_look.png" alt="Luxury Dining Setup" width={1200} height={800} className="shop-the-look-image" style={{ width: '100%', height: 'auto', objectFit: 'cover' }} />
+          <Image src="/images/shop_the_look.png" alt="Luxury Dining Setup" width={1200} height={480} className="shop-the-look-image" priority />
           
           {/* Hotspot 1: Bone China Set (Center Plate) */}
           <div 
             className="hotspot" 
-            style={{ top: '80%', left: '50%' }}
+            style={{ top: '48%', left: '50%' }}
             onMouseEnter={() => setHoveredHotspot(7)}
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {
@@ -200,7 +200,7 @@ export default function Home() {
           {/* Hotspot 2: Crystal Wine Glass (Left Glass) */}
           <div 
             className="hotspot" 
-            style={{ top: '70%', left: '25%' }}
+            style={{ top: '33%', left: '30%' }}
             onMouseEnter={() => setHoveredHotspot(9)}
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {
@@ -227,7 +227,7 @@ export default function Home() {
           {/* Hotspot 3: Matte Ceramic Plates (Right side) */}
           <div 
             className="hotspot" 
-            style={{ top: '75%', left: '75%' }}
+            style={{ top: '40%', left: '69.5%' }}
             onMouseEnter={() => setHoveredHotspot(10)}
             onMouseLeave={() => setHoveredHotspot(null)}
             onClick={() => {

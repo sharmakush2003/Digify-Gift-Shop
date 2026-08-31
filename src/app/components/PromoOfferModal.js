@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -16,10 +17,13 @@ const DEFAULT_CONFIG = {
 };
 
 export default function PromoOfferModal() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [toastMessage, setToastMessage] = useState("");
+
+  const isAdminOrDelivery = pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery'));
 
   const loadConfig = () => {
     try {
@@ -47,6 +51,8 @@ export default function PromoOfferModal() {
   };
 
   useEffect(() => {
+    if (isAdminOrDelivery) return;
+
     const activeConfig = loadConfig();
     if (!activeConfig) return;
 
@@ -57,7 +63,7 @@ export default function PromoOfferModal() {
     }, (activeConfig.delaySeconds || 1.5) * 1000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAdminOrDelivery]);
 
   const handleClose = () => {
     if (dontShowAgain) {
@@ -75,7 +81,7 @@ export default function PromoOfferModal() {
     handleClose();
   };
 
-  if (!isOpen) return null;
+  if (isAdminOrDelivery || !isOpen) return null;
 
   return (
     <div 
