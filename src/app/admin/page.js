@@ -386,11 +386,14 @@ export default function AdminPage() {
       const currentOrder = ordersList.find(o => o.id === orderId);
       const paymentStatus = nextStatus === "Delivered" ? "SUCCESS" : (currentOrder && currentOrder.paymentStatus === "Paid" ? "SUCCESS" : (currentOrder ? currentOrder.paymentStatus : "SUCCESS"));
 
+      // Optimistically update the UI to prevent perceived unresponsiveness
+      setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, courierStatus, paymentStatus } : o));
+
       // Handle OTP generation when marking as Shipped
       let otpGenerated = null;
       let newShippingAddress = null;
       
-      const { data: dbRecord } = await supabase.from('orders').select('shipping_address').eq('order_number', orderId).single();
+      const { data: dbRecord } = await supabase.from('orders').select('shipping_address').eq('id', docId).single();
       if (dbRecord && dbRecord.shipping_address) {
         newShippingAddress = { ...dbRecord.shipping_address };
         if (nextStatus === "Shipped" && !newShippingAddress.delivery_otp) {
@@ -408,7 +411,11 @@ export default function AdminPage() {
         updateData.shipping_address = newShippingAddress;
       }
 
-      await supabase.from('orders').update(updateData).eq('order_number', orderId);
+      const { error: updateError } = await supabase.from('orders').update(updateData).eq('id', docId);
+      if (updateError) {
+        console.error("Supabase update error:", updateError);
+        throw updateError;
+      }
 
       // Trigger Google Sheets Webhook Update
       try {
@@ -433,8 +440,9 @@ export default function AdminPage() {
     } catch (e) {
       console.warn("Failed to update order status in Supabase", e);
       updateOrderStatus(orderId, nextStatus); // Fallback
+      // Revert optimistic update if database actually failed
+      loadDbData();
     }
-    loadDbData();
     
     // Play sound chime and trigger custom milestone toast
     playOrderChime();
