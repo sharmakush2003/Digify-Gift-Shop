@@ -42,8 +42,13 @@ export default function CheckoutPage() {
   const [createdOrder, setCreatedOrder] = useState(null);
 
   useEffect(() => {
+    if (!user) {
+      router.push('/auth');
+    }
+  }, [user, router]);
+
+  useEffect(() => {
     // Load values calculated on cart page
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShippingFee(parseFloat(localStorage.getItem("orient_checkout_shipping") || "0"));
     setPromoDiscount(parseFloat(localStorage.getItem("orient_checkout_promo_disc") || "0"));
     setPromoCode(localStorage.getItem("orient_checkout_promo_code") || "");
@@ -388,8 +393,10 @@ export default function CheckoutPage() {
                   type="tel" 
                   className="form-input" 
                   required 
+                  readOnly={!!(user && (user.phone || user.user_metadata?.phone))}
                   value={phone} 
                   onChange={(e) => setPhone(e.target.value)} 
+                  style={(user && (user.phone || user.user_metadata?.phone)) ? { background: "var(--bg-inset)", cursor: "not-allowed" } : {}}
                 />
               </div>
               <div className="form-group full-width">

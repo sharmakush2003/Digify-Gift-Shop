@@ -85,25 +85,19 @@ export default function UsersTab() {
             if (parts.length > 0) formattedAddress = parts.join(', ');
           }
 
-          // Key matching: prioritize customer_id first, then email, then phone
+          // Key matching: match orders strictly by customer_id or email
           const key = order.customer_id || (email && email !== 'N/A' ? email : '') || (formattedPhone && formattedPhone !== 'N/A' ? formattedPhone : order.id);
 
-          let existing = userMap.get(key);
-          if (!existing && order.customer_id) {
+          let existing = null;
+          if (order.customer_id) {
             existing = userMap.get(order.customer_id);
           }
           if (!existing && email && email !== 'N/A') {
-            existing = Array.from(userMap.values()).find(u => u.email === email);
-          }
-          if (!existing && formattedPhone && formattedPhone !== 'N/A') {
-            existing = Array.from(userMap.values()).find(u => u.phone === formattedPhone);
+            existing = Array.from(userMap.values()).find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
           }
 
           if (existing) {
             if (name && name !== 'Customer' && (existing.name === 'Customer' || existing.name.startsWith('User ('))) {
-              existing.name = name;
-            } else if (name && name !== 'Customer' && order.created_at) {
-              // Update name if this is a more recent name or order
               existing.name = name;
             }
             if (existing.phone === 'N/A' && formattedPhone) existing.phone = formattedPhone;
@@ -221,21 +215,15 @@ export default function UsersTab() {
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "1.5rem" }}>
         <div style={{ background: "#f8fafc", padding: "14px 18px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-          <span style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Total Users</span>
+          <span style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#64748b", fontWeight: "600" }}>Total Registered Users</span>
           <h4 style={{ margin: "4px 0 0 0", fontSize: "1.4rem", color: "#0f172a" }}>
             {usersList.filter(u => (u.phone && u.phone !== 'N/A') || (u.email && u.email !== 'N/A')).length}
           </h4>
         </div>
         <div style={{ background: "#f0fdf4", padding: "14px 18px", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-          <span style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#166534", fontWeight: "600" }}>Registered</span>
+          <span style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#166534", fontWeight: "600" }}>Active Buyers</span>
           <h4 style={{ margin: "4px 0 0 0", fontSize: "1.4rem", color: "#14532d" }}>
-            {usersList.filter(u => ((u.phone && u.phone !== 'N/A') || (u.email && u.email !== 'N/A')) && u.type === 'Registered').length}
-          </h4>
-        </div>
-        <div style={{ background: "#fff7ed", padding: "14px 18px", borderRadius: "8px", border: "1px solid #fed7aa" }}>
-          <span style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#9a3412", fontWeight: "600" }}>Guest Buyers</span>
-          <h4 style={{ margin: "4px 0 0 0", fontSize: "1.4rem", color: "#7c2d12" }}>
-            {usersList.filter(u => ((u.phone && u.phone !== 'N/A') || (u.email && u.email !== 'N/A')) && u.type === 'Guest').length}
+            {usersList.filter(u => ((u.phone && u.phone !== 'N/A') || (u.email && u.email !== 'N/A')) && u.ordersCount > 0).length}
           </h4>
         </div>
       </div>

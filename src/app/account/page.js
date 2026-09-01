@@ -42,6 +42,41 @@ export default function AccountPage() {
     }
   };
 
+  const [userOrders, setUserOrders] = useState([]);
+  const [fetchingOrders, setFetchingOrders] = useState(true);
+
+  useEffect(() => {
+    const fetchMyOrders = async () => {
+      if (!user) return;
+      setFetchingOrders(true);
+      try {
+        const cleanPhone = user.phone || user.user_metadata?.phone || '';
+        const formattedPhone = cleanPhone ? (cleanPhone.startsWith('+') ? cleanPhone : `+91${cleanPhone.replace(/\D/g, '').slice(-10)}`) : '';
+        const userEmail = user.email || '';
+
+        const filterConditions = [];
+        if (user.id) filterConditions.push(`customer_id.eq.${user.id}`);
+        if (userEmail) filterConditions.push(`guest_email.eq.${userEmail}`);
+        if (formattedPhone) filterConditions.push(`guest_phone.eq.${formattedPhone}`);
+
+        if (filterConditions.length > 0) {
+          const { data } = await supabase
+            .from('orders')
+            .select('*')
+            .or(filterConditions.join(','));
+          setUserOrders(data || []);
+        } else {
+          setUserOrders([]);
+        }
+      } catch (err) {
+        console.error("Error fetching user orders:", err);
+      }
+      setFetchingOrders(false);
+    };
+
+    fetchMyOrders();
+  }, [user]);
+
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth');
@@ -132,7 +167,7 @@ export default function AccountPage() {
         <div className="account-stats-row">
           <div className="account-stat-card">
             <span className="stat-label">Total Orders</span>
-            <span className="stat-value">{orders ? orders.length : 0}</span>
+            <span className="stat-value">{fetchingOrders ? '...' : userOrders.length}</span>
           </div>
           <div className="account-stat-card">
             <span className="stat-label">Saved Wishlist</span>
@@ -171,12 +206,12 @@ export default function AccountPage() {
                       style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
                     />
                     
-                    <span className="detail-label" style={{ marginTop: '10px' }}>Phone Number</span>
+                    <span className="detail-label" style={{ marginTop: '10px' }}>Phone Number (Locked)</span>
                     <input 
                       type="tel" 
                       value={editPhone}
-                      onChange={(e) => setEditPhone(e.target.value)}
-                      style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
+                      readOnly
+                      style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem', background: 'var(--bg-inset)', cursor: 'not-allowed' }}
                     />
 
                     <span className="detail-label" style={{ marginTop: '10px' }}>Street Address</span>

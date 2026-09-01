@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -18,6 +19,8 @@ const DEFAULT_CONFIG = {
 
 export default function PromoOfferModal() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -73,6 +76,12 @@ export default function PromoOfferModal() {
   };
 
   const handleClaim = () => {
+    if (!user) {
+      handleClose();
+      router.push('/auth');
+      return;
+    }
+
     if (config.couponCode) {
       navigator.clipboard?.writeText(config.couponCode);
       setToastMessage(`✓ Coupon Code '${config.couponCode}' copied to clipboard!`);
@@ -105,25 +114,16 @@ export default function PromoOfferModal() {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
         }
-        @keyframes pulseGlow {
-          0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
-        }
         @media (max-width: 640px) {
-          .promo-modal-card {
+          .promo-modal-responsive {
             grid-template-columns: 1fr !important;
             max-width: 92vw !important;
-            border-radius: 24px !important;
           }
           .promo-desktop-banner {
             display: none !important;
           }
           .promo-mobile-banner {
-            display: flex !important;
-          }
-          .promo-content-padding {
-            padding: 1.4rem 1.2rem 1.2rem 1.2rem !important;
+            display: block !important;
           }
         }
         @media (min-width: 641px) {
@@ -134,69 +134,61 @@ export default function PromoOfferModal() {
       `}</style>
 
       <div 
-        className="promo-modal-card"
-        onClick={(e) => e.stopPropagation()} 
         style={{ 
-          width: "100%", 
-          maxWidth: "680px", 
           backgroundColor: "#ffffff", 
           borderRadius: "24px", 
+          maxWidth: "680px", 
+          width: "100%", 
           overflow: "hidden", 
-          boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)", 
-          display: "grid", 
-          gridTemplateColumns: "1fr 1.1fr",
-          position: "relative"
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+          position: "relative",
+          display: "grid",
+          gridTemplateColumns: "240px 1fr"
         }}
+        className="promo-modal-responsive"
+        onClick={(e) => e.stopPropagation()} 
       >
         {/* CLOSE BUTTON */}
         <button 
           onClick={handleClose}
-          aria-label="Close promo popup"
           style={{ 
             position: "absolute", 
-            top: "12px", 
-            right: "12px", 
+            top: "16px", 
+            right: "16px", 
             width: "32px", 
             height: "32px", 
             borderRadius: "50%", 
-            backgroundColor: "rgba(255, 255, 255, 0.9)", 
-            border: "1px solid rgba(0, 0, 0, 0.1)", 
-            color: "#334155", 
+            backgroundColor: "rgba(15, 23, 42, 0.06)", 
+            border: "none", 
+            cursor: "pointer", 
             display: "flex", 
             alignItems: "center", 
-            justifyContent: "center", 
-            cursor: "pointer", 
-            fontSize: "0.95rem",
-            zIndex: 20,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            transition: "all 0.2s"
+            justifyContent: "center",
+            zIndex: 10,
+            transition: "background-color 0.2s"
           }}
-          onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.1)"}
-          onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.12)"}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.06)"}
         >
-          <i className="fa-solid fa-xmark"></i>
+          <i className="fa-solid fa-xmark" style={{ color: "#475569", fontSize: "1rem" }}></i>
         </button>
 
-        {/* MOBILE TOP BANNER HEADER (Visible on Mobile Screens) */}
+        {/* MOBILE TOP BANNER */}
         <div 
           className="promo-mobile-banner"
           style={{ 
             background: config.bannerImageUrl 
               ? `url(${config.bannerImageUrl}) center/cover no-repeat` 
-              : "linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #4f46e5 100%)", 
-            padding: "1.8rem 1.2rem 1.2rem 1.2rem", 
+              : "linear-gradient(135deg, #1e40af 0%, #2563eb 100%)", 
+            padding: "1.5rem 1rem", 
             color: "#ffffff", 
-            display: "flex", 
-            flexDirection: "column", 
-            alignItems: "center",
             textAlign: "center",
             position: "relative"
           }}
         >
-          <div style={{ position: "absolute", inset: 0, backgroundColor: config.bannerImageUrl ? "rgba(0,0,0,0.45)" : "transparent" }}></div>
-          <div style={{ position: "relative", zIndex: 1, width: "100%" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", backgroundColor: "rgba(255,255,255,0.2)", padding: "4px 12px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.3)", marginBottom: "8px" }}>
-              <i className="fa-solid fa-gift" style={{ color: "#fde047", fontSize: "0.9rem" }}></i>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", backgroundColor: "rgba(255,255,255,0.2)", padding: "4px 10px", borderRadius: "20px", marginBottom: "8px" }}>
+              <i className="fa-solid fa-gift" style={{ color: "#fde047", fontSize: "0.85rem" }}></i>
               <span style={{ fontSize: "0.7rem", fontWeight: "800", letterSpacing: "1px", textTransform: "uppercase" }}>ORIENT EXCLUSIVE</span>
             </div>
             <h3 style={{ fontSize: "1.3rem", fontWeight: "800", margin: "4px 0 2px 0", color: "#ffffff", fontFamily: "var(--font-serif, serif)" }}>
@@ -208,14 +200,14 @@ export default function PromoOfferModal() {
           </div>
         </div>
 
-        {/* DESKTOP LEFT BANNER (Visible on Desktop Screens) */}
+        {/* DESKTOP LEFT BANNER */}
         <div 
           className="promo-desktop-banner"
           style={{ 
             background: config.bannerImageUrl 
               ? `url(${config.bannerImageUrl}) center/cover no-repeat` 
-              : "linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #4f46e5 100%)", 
-            padding: "2.5rem 1.8rem", 
+              : "linear-gradient(135deg, #1e40af 0%, #2563eb 100%)", 
+            padding: "2rem", 
             color: "#ffffff", 
             display: "flex", 
             flexDirection: "column", 
@@ -225,23 +217,17 @@ export default function PromoOfferModal() {
             position: "relative"
           }}
         >
-          <div style={{ position: "absolute", inset: 0, backgroundColor: config.bannerImageUrl ? "rgba(0,0,0,0.45)" : "transparent" }}></div>
+          <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.2)" }}></div>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <div style={{ width: "56px", height: "56px", borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px auto", border: "1px solid rgba(255,255,255,0.35)", boxShadow: "0 8px 16px rgba(0,0,0,0.15)" }}>
-              <i className="fa-solid fa-gift" style={{ fontSize: "1.9rem", color: "#fde047" }}></i>
-            </div>
-            <h3 style={{ fontSize: "1.5rem", fontWeight: "800", margin: "0 0 10px 0", color: "#ffffff", lineHeight: "1.25", fontFamily: "var(--font-serif, serif)" }}>
+            <i className="fa-solid fa-gift" style={{ fontSize: "3rem", color: "#fde047", marginBottom: "16px" }}></i>
+            <h3 style={{ fontSize: "1.4rem", fontWeight: "800", margin: "0 0 10px 0", color: "#ffffff", lineHeight: "1.25", fontFamily: "var(--font-serif, serif)" }}>
               {config.bannerTitle || "Scale Your Elegance"}
             </h3>
-            <p style={{ fontSize: "0.85rem", opacity: 0.92, margin: 0, lineHeight: "1.5" }}>
-              {config.bannerSubtitle || "Join the future of retail with Orient Crockeries."}
-            </p>
           </div>
         </div>
 
         {/* RIGHT / MAIN CONTENT BODY */}
         <div 
-          className="promo-content-padding"
           style={{ padding: "2.2rem 1.8rem 1.6rem 1.8rem", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#ffffff" }}
         >
           <div>
@@ -252,7 +238,7 @@ export default function PromoOfferModal() {
               {config.title || "Special Offer - Free Gift Voucher"}
             </h2>
             <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0 0 16px 0", lineHeight: "1.5" }}>
-              {config.subtitle || "Experience luxury dining with Orient Crockeries today."}
+              {user ? (config.subtitle || "Experience luxury dining with Orient Crockeries today.") : "Sign up or log in to unlock your ₹500 OFF voucher code!"}
             </p>
 
             {/* STYLISH COUPON CARD */}
@@ -260,8 +246,8 @@ export default function PromoOfferModal() {
               <span style={{ fontSize: "0.72rem", color: "#2563eb", fontWeight: "800", letterSpacing: "1px", textTransform: "uppercase", display: "inline-block", backgroundColor: "#dbeafe", padding: "2px 8px", borderRadius: "10px" }}>
                 {config.discountText || "FLAT ₹500 OFF"}
               </span>
-              <div style={{ fontSize: "1.45rem", fontWeight: "900", color: "#1e293b", margin: "6px 0 2px 0", letterSpacing: "2.5px", fontFamily: "monospace" }}>
-                {config.couponCode || "WELCOME500"}
+              <div style={{ fontSize: user ? "1.45rem" : "1.1rem", fontWeight: "900", color: user ? "#1e293b" : "#2563eb", margin: "6px 0 2px 0", letterSpacing: user ? "2.5px" : "0.5px", fontFamily: user ? "monospace" : "inherit" }}>
+                {user ? (config.couponCode || "WELCOME500") : "🔒 LOGIN TO UNLOCK CODE"}
               </div>
               <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "500" }}>
                 {config.minOrderText || "On orders above ₹1,999"}
@@ -270,13 +256,13 @@ export default function PromoOfferModal() {
           </div>
 
           <div>
-            {/* ACTION BUTTON WITH VIBRANT ANIMATION */}
+            {/* ACTION BUTTON */}
             <button 
               type="button"
               onClick={handleClaim}
               style={{ 
                 width: "100%", 
-                background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", 
+                background: user ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)" : "linear-gradient(135deg, #10b981 0%, #059669 100%)", 
                 color: "#ffffff", 
                 border: "none", 
                 padding: "13px 16px", 
@@ -284,7 +270,7 @@ export default function PromoOfferModal() {
                 fontWeight: "800", 
                 fontSize: "0.95rem", 
                 cursor: "pointer", 
-                boxShadow: "0 6px 20px rgba(37, 99, 235, 0.4)",
+                boxShadow: user ? "0 6px 20px rgba(37, 99, 235, 0.4)" : "0 6px 20px rgba(16, 185, 129, 0.4)",
                 transition: "all 0.2s ease-in-out",
                 display: "flex",
                 alignItems: "center",
@@ -294,15 +280,13 @@ export default function PromoOfferModal() {
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 8px 24px rgba(37, 99, 235, 0.5)";
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 6px 20px rgba(37, 99, 235, 0.4)";
               }}
             >
-              <i className="fa-solid fa-copy"></i>
-              <span>CLAIM OFFER & COPY CODE</span>
+              <i className={user ? "fa-solid fa-copy" : "fa-solid fa-right-to-bracket"}></i>
+              <span>{user ? "CLAIM OFFER & COPY CODE" : "LOGIN / SIGN UP TO CLAIM ₹500 OFF"}</span>
             </button>
 
             {/* DON'T SHOW FOR 7 DAYS CHECKBOX */}
