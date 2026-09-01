@@ -168,19 +168,7 @@ export default function AdminPage() {
         };
       }) : [];
       
-      // Merge with local storage orders so recent tests aren't lost
-      const localOrders = getOrders();
-      if (localOrders && localOrders.length > 0) {
-        // Only add local orders that aren't already in Supabase (by ID or UUID)
-        const supabaseOrderIds = new Set(ordersData.flatMap(o => [o.order_number, o.id, o._docId]).filter(Boolean));
-        const missingLocalOrders = localOrders.filter(o => !supabaseOrderIds.has(o.id));
-        ordersData = [...ordersData, ...missingLocalOrders];
-      }
-
-      if (!ordersData || ordersData.length === 0) {
-        ordersData = getOrders();
-      }
-
+      // Sort orders by date
       ordersData.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
       
       // Auto-trigger sound chime & toast popup if a new order was created recently (within last 3 minutes)
@@ -199,7 +187,8 @@ export default function AdminPage() {
       setOrdersList(ordersData);
     } catch (e) {
       console.warn("Failed to load orders from Supabase", e);
-      setOrdersList(getOrders()); // Fallback
+      // Removed fallback to getOrders() so only real database data or nothing is shown
+      setOrdersList([]);
     }
   };
 
