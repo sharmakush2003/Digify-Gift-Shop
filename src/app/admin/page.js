@@ -140,7 +140,8 @@ export default function AdminPage() {
       setProductsList(productsData);
     } catch (e) {
       console.warn("Failed to load products from Supabase", e);
-      setProductsList(getProducts()); // Fallback
+      // Removed fallback to getProducts() to ensure only real database data or nothing is shown
+      setProductsList([]);
     }
     
     try {

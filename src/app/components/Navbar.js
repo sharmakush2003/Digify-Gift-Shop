@@ -74,8 +74,6 @@ export default function Navbar() {
           <i className="fa-solid fa-crown" style={{ color: '#d4af37' }}></i>
           FINE DINING &amp; LUXURY HOSPITALITY SOLUTIONS
         </span>
-        <span className="announcement-divider">•</span>
-        <span>FREE EXPRESS SHIPPING ACROSS INDIA ON ORDERS OVER ₹1,999</span>
       </div>
 
       {/* Mobile Nav Overlay Backdrop */}
