@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "../context/AppContext";
+import { useAuth } from "../context/AuthContext";
 import { saveOrder } from "../db";
 import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import Link from "next/link";
@@ -10,6 +11,7 @@ import Script from "next/script";
 
 export default function CheckoutPage() {
   const { cart, clearCart } = useApp();
+  const { user } = useAuth();
   const router = useRouter();
 
   // Retrieve checkout figures from localStorage
@@ -49,6 +51,15 @@ export default function CheckoutPage() {
 
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768);
   }, []);
+
+  // Prefill user details if logged in
+  useEffect(() => {
+    if (user) {
+      if (user.email) setEmail(user.email);
+      if (user.user_metadata?.full_name) setName(user.user_metadata.full_name);
+      if (user.phone) setPhone(user.phone);
+    }
+  }, [user]);
 
   // Compute subtotal and GST details item by item
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -356,8 +367,10 @@ export default function CheckoutPage() {
                   type="email" 
                   className="form-input" 
                   required 
+                  readOnly={!!user}
                   value={email} 
                   onChange={(e) => setEmail(e.target.value)} 
+                  style={user ? { background: "var(--bg-inset)", cursor: "not-allowed" } : {}}
                 />
               </div>
               <div className="form-group full-width">
