@@ -16,6 +16,10 @@ export default function AccountPage() {
   const [viewingOrders, setViewingOrders] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editStreet, setEditStreet] = useState("");
+  const [editArea, setEditArea] = useState("");
+  const [editPincode, setEditPincode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   
 
@@ -61,10 +65,18 @@ export default function AccountPage() {
   const userInitial = user?.displayName ? String(user.displayName).charAt(0).toUpperCase() : (user?.email ? String(user.email).charAt(0).toUpperCase() : 'M');
   const userName = user?.user_metadata?.full_name || user?.displayName || 'Orient Patron';
   const userEmail = user?.email || 'N/A';
+  const userPhone = user?.user_metadata?.phone || user?.phone || 'Not provided';
+  const userStreet = user?.user_metadata?.street || 'Not provided';
+  const userArea = user?.user_metadata?.area || '';
+  const userPincode = user?.user_metadata?.pincode || '';
   const joinedDate = user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Member';
 
   const handleEditProfile = () => {
     setEditName(userName);
+    setEditPhone(userPhone === 'Not provided' ? '' : userPhone);
+    setEditStreet(userStreet === 'Not provided' ? '' : userStreet);
+    setEditArea(userArea);
+    setEditPincode(userPincode);
     setIsEditingProfile(true);
   };
 
@@ -73,7 +85,13 @@ export default function AccountPage() {
     setIsSaving(true);
     try {
       const { data, error } = await supabase.auth.updateUser({
-        data: { full_name: editName.trim() }
+        data: { 
+          full_name: editName.trim(),
+          phone: editPhone.trim(),
+          street: editStreet.trim(),
+          area: editArea,
+          pincode: editPincode.trim()
+        }
       });
       if (error) throw error;
       
@@ -152,7 +170,69 @@ export default function AccountPage() {
                       onChange={(e) => setEditName(e.target.value)}
                       style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
                     />
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+                    
+                    <span className="detail-label" style={{ marginTop: '10px' }}>Phone Number</span>
+                    <input 
+                      type="tel" 
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
+                    />
+
+                    <span className="detail-label" style={{ marginTop: '10px' }}>Street Address</span>
+                    <input 
+                      type="text" 
+                      value={editStreet}
+                      onChange={(e) => setEditStreet(e.target.value)}
+                      style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem' }}
+                    />
+
+                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                      <div style={{ flex: 1 }}>
+                        <span className="detail-label">Area (Jaipur)</span>
+                        <select 
+                          value={editArea}
+                          onChange={(e) => setEditArea(e.target.value)}
+                          style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem', marginTop: '10px' }}
+                        >
+                          <option value="">Select Area...</option>
+                          <option value="Adarsh Nagar">Adarsh Nagar</option>
+                          <option value="Ajmer Road">Ajmer Road</option>
+                          <option value="Bani Park">Bani Park</option>
+                          <option value="Bapu Nagar">Bapu Nagar</option>
+                          <option value="C-Scheme">C-Scheme</option>
+                          <option value="Civil Lines">Civil Lines</option>
+                          <option value="Gandhi Nagar">Gandhi Nagar</option>
+                          <option value="Gopalpura">Gopalpura</option>
+                          <option value="Jagatpura">Jagatpura</option>
+                          <option value="Jhotwara">Jhotwara</option>
+                          <option value="Kalwar Road">Kalwar Road</option>
+                          <option value="Malviya Nagar">Malviya Nagar</option>
+                          <option value="Mansarovar">Mansarovar</option>
+                          <option value="Pratap Nagar">Pratap Nagar</option>
+                          <option value="Raja Park">Raja Park</option>
+                          <option value="Shyam Nagar">Shyam Nagar</option>
+                          <option value="Sitapura">Sitapura</option>
+                          <option value="Sodala">Sodala</option>
+                          <option value="Tonk Road">Tonk Road</option>
+                          <option value="Vaishali Nagar">Vaishali Nagar</option>
+                          <option value="Vidyadhar Nagar">Vidyadhar Nagar</option>
+                          <option value="Other">Other Area</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span className="detail-label">PIN Code</span>
+                        <input 
+                          type="text" 
+                          maxLength={6}
+                          value={editPincode}
+                          onChange={(e) => setEditPincode(e.target.value.replace(/\D/g, ''))}
+                          style={{ padding: '0.8rem', width: '100%', borderRadius: '4px', border: '1px solid var(--border)', fontFamily: 'var(--font-sans)', fontSize: '1rem', marginTop: '10px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                       <button onClick={handleSaveProfile} disabled={isSaving} className="btn" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
                         {isSaving ? "Saving..." : "Save Changes"}
                       </button>
@@ -167,7 +247,7 @@ export default function AccountPage() {
                       <span className="detail-label">Full Name</span>
                       <span className="detail-val" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {userName} 
-                        <button onClick={handleEditProfile} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title="Edit Name">
+                        <button onClick={handleEditProfile} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem' }} title="Edit Details">
                           <i className="fa-solid fa-pen-to-square"></i> Edit
                         </button>
                       </span>
@@ -175,6 +255,22 @@ export default function AccountPage() {
                     <div className="detail-item">
                       <span className="detail-label">Email Address</span>
                       <span className="detail-val">{userEmail}</span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Phone Number</span>
+                      <span className="detail-val">{userPhone}</span>
+                    </div>
+                    <div className="detail-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '5px' }}>
+                      <span className="detail-label">Shipping Address</span>
+                      <span className="detail-val">
+                        {userStreet !== 'Not provided' ? (
+                          <>
+                            {userStreet}
+                            {userArea && `, ${userArea}`}
+                            {userPincode && <><br/>Jaipur, Rajasthan - {userPincode}</>}
+                          </>
+                        ) : 'Not provided'}
+                      </span>
                     </div>
                     <div className="detail-item">
                       <span className="detail-label">Account Status</span>

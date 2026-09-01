@@ -57,7 +57,14 @@ export default function CheckoutPage() {
     if (user) {
       if (user.email) setEmail(user.email);
       if (user.user_metadata?.full_name) setName(user.user_metadata.full_name);
-      if (user.phone) setPhone(user.phone);
+      
+      // Phone from user_metadata (added now) or standard auth phone
+      const userPhone = user.user_metadata?.phone || user.phone;
+      if (userPhone) setPhone(userPhone);
+
+      if (user.user_metadata?.street) setStreet(user.user_metadata.street);
+      if (user.user_metadata?.area) setArea(user.user_metadata.area);
+      if (user.user_metadata?.pincode) setShippingPincode(user.user_metadata.pincode);
     }
   }, [user]);
 
