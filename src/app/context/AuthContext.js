@@ -82,26 +82,35 @@ export function AuthProvider({ children }) {
   };
 
   const signup = async (email, password, name, phone = '') => {
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
     const formattedPhone = phone ? (phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`) : '';
     
-    // Check if Email already exists in customers table
-    if (email) {
-      const { data: existingEmail } = await supabase.from('customers').select('id').eq('email', email.trim().toLowerCase()).maybeSingle();
+    // 1. Check if Email already exists in customers table (case-insensitive)
+    if (cleanEmail) {
+      const { data: existingEmail } = await supabase
+        .from('customers')
+        .select('id')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
       if (existingEmail) {
         throw new Error('This Email Address is already registered. Please log in to your existing account.');
       }
     }
 
-    // Check if Mobile Number already exists in customers table
+    // 2. Check if Mobile Number already exists in customers table
     if (formattedPhone) {
-      const { data: existingPhone } = await supabase.from('customers').select('id').eq('phone_number', formattedPhone).maybeSingle();
+      const { data: existingPhone } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('phone_number', formattedPhone)
+        .maybeSingle();
       if (existingPhone) {
         throw new Error('This Mobile Number is already registered. Please log in to your existing account.');
       }
     }
 
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
         data: {
@@ -110,7 +119,14 @@ export function AuthProvider({ children }) {
         }
       }
     });
+    
     if (error) throw error;
+
+    // Supabase Auth returns an empty identities array if the user already exists
+    if (data?.user && data.user.identities && data.user.identities.length === 0) {
+      throw new Error('This Email Address is already registered. Please log in to your existing account.');
+    }
+
     if (data?.user) {
       const userObj = { ...data.user, user_metadata: { full_name: name, phone: formattedPhone } };
       setUser(userObj);
