@@ -15,11 +15,44 @@ export function AuthProvider({ children }) {
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
 
+  const syncUserToCustomers = async (u) => {
+    if (!u) return;
+    try {
+      // 1. Ensure user row exists in public.users to satisfy FK constraint
+      try {
+        await supabase.from('users').upsert({ id: u.id, role: 'customer' }, { onConflict: 'id' });
+      } catch (e) {}
+
+      // 2. Upsert into customers table
+      const fullName = u.user_metadata?.full_name || u.user_metadata?.name || (u.email ? u.email.split('@')[0] : 'Customer');
+      let phone = u.phone || u.user_metadata?.phone || '';
+      if (phone) {
+        const cleanPhone = phone.replace(/\D/g, '');
+        phone = phone.startsWith('+') ? phone : `+91${cleanPhone.slice(-10)}`;
+      }
+      
+      try {
+        await supabase.from('customers').upsert({
+          id: u.id,
+          email: u.email || '',
+          full_name: fullName,
+          phone_number: phone,
+          loyalty_points: 0
+        }, { onConflict: 'id' });
+      } catch (e) {}
+    } catch (err) {
+      console.error("Auto sync customer error:", err);
+    }
+  };
+
   useEffect(() => {
     // Get initial session
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
+      if (session?.user) {
+        syncUserToCustomers(session.user);
+      }
       setLoading(false);
     };
 
@@ -28,6 +61,9 @@ export function AuthProvider({ children }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
+      if (session?.user) {
+        syncUserToCustomers(session.user);
+      }
       setLoading(false);
     });
 
@@ -47,6 +83,23 @@ export function AuthProvider({ children }) {
 
   const signup = async (email, password, name, phone = '') => {
     const formattedPhone = phone ? (phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`) : '';
+    
+    // Check if Email already exists in customers table
+    if (email) {
+      const { data: existingEmail } = await supabase.from('customers').select('id').eq('email', email.trim().toLowerCase()).maybeSingle();
+      if (existingEmail) {
+        throw new Error('This Email Address is already registered. Please log in to your existing account.');
+      }
+    }
+
+    // Check if Mobile Number already exists in customers table
+    if (formattedPhone) {
+      const { data: existingPhone } = await supabase.from('customers').select('id').eq('phone_number', formattedPhone).maybeSingle();
+      if (existingPhone) {
+        throw new Error('This Mobile Number is already registered. Please log in to your existing account.');
+      }
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -63,14 +116,23 @@ export function AuthProvider({ children }) {
       setUser(userObj);
       
       // Sync user profile to database table
-      await supabase.from('users').upsert({
-        id: data.user.id,
-        email: email,
-        full_name: name,
-        phone: formattedPhone,
-        role: 'customer',
-        created_at: new Date().toISOString()
-      }, { onConflict: 'id' }).catch(() => {});
+      try {
+        await supabase.from('users').upsert({
+          id: data.user.id,
+          role: 'customer'
+        }, { onConflict: 'id' });
+      } catch (e) {}
+
+      // Sync user to customers table
+      try {
+        await supabase.from('customers').upsert({
+          id: data.user.id,
+          email: email,
+          full_name: name,
+          phone_number: formattedPhone,
+          loyalty_points: 0
+        }, { onConflict: 'id' });
+      } catch (e) {}
     }
     return data;
   };
@@ -106,13 +168,23 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         
         // Sync to database
-        await supabase.from('users').upsert({
-          id: data.user.id,
-          phone: formattedPhone,
-          full_name: name || data.user.user_metadata?.full_name || `Customer (+91 ${cleanPhone.slice(-10)})`,
-          role: 'customer',
-          created_at: new Date().toISOString()
-        }, { onConflict: 'id' }).catch(() => {});
+        try {
+          await supabase.from('users').upsert({
+            id: data.user.id,
+            role: 'customer'
+          }, { onConflict: 'id' });
+        } catch (e) {}
+
+        // Sync to customers table
+        try {
+          await supabase.from('customers').upsert({
+            id: data.user.id,
+            phone_number: formattedPhone,
+            full_name: name || data.user.user_metadata?.full_name || `Customer (+91 ${cleanPhone.slice(-10)})`,
+            email: data.user.email || '',
+            loyalty_points: 0
+          }, { onConflict: 'id' });
+        } catch (e) {}
 
         return data;
       }
@@ -120,10 +192,15 @@ export function AuthProvider({ children }) {
       console.log('Supabase verify error:', err.message);
     }
 
-    // 2. Demo OTP fallback (123456 or 6-digit code for testing on localhost)
+    // 2. Demo OTP fallback (123456 or 6-digit code for testing on localhost/mobile)
     if (otpCode === '123456' || otpCode.length === 6) {
+      const validUuid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+
       const demoUser = {
-        id: 'phone-usr-' + Date.now(),
+        id: validUuid,
         email: `${cleanPhone.slice(-10)}@phone.orientcrockery.com`,
         phone: formattedPhone,
         user_metadata: {
@@ -133,15 +210,28 @@ export function AuthProvider({ children }) {
       };
       setUser(demoUser);
 
-      // Sync to database
-      await supabase.from('users').upsert({
-        id: demoUser.id,
-        email: demoUser.email,
-        phone: formattedPhone,
-        full_name: demoUser.user_metadata.full_name,
-        role: 'customer',
-        created_at: new Date().toISOString()
-      }, { onConflict: 'id' }).catch(() => {});
+      // Save demo user to local storage for local persistence
+      try {
+        localStorage.setItem("orient_demo_user", JSON.stringify(demoUser));
+      } catch (e) {}
+
+      // Attempt sync to database (catch foreign key errors safely if auth.users constraint exists)
+      try {
+        await supabase.from('users').upsert({
+          id: demoUser.id,
+          role: 'customer'
+        }, { onConflict: 'id' });
+      } catch (e) {}
+
+      try {
+        await supabase.from('customers').upsert({
+          id: demoUser.id,
+          email: demoUser.email,
+          phone_number: formattedPhone,
+          full_name: demoUser.user_metadata.full_name,
+          loyalty_points: 0
+        }, { onConflict: 'id' });
+      } catch (e) {}
 
       return { user: demoUser };
     }

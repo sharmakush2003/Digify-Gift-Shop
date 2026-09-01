@@ -122,6 +122,30 @@ export async function POST(request) {
       await supabase.from("order_items").insert(orderItems);
     }
 
+    // Sync to customers table
+    if (customerDetails.name && (customerDetails.phone || customerDetails.email)) {
+      const phone = customerDetails.phone ? (customerDetails.phone.startsWith('+') ? customerDetails.phone : `+91${customerDetails.phone.replace(/\D/g, '').slice(-10)}`) : '';
+      
+      const { data: existingCustomer } = await supabase.from('customers')
+        .select('id')
+        .eq('phone_number', phone)
+        .maybeSingle();
+
+      const customerId = customerDetails.userId || existingCustomer?.id || crypto.randomUUID();
+
+      try {
+        await supabase.from('customers').upsert({
+          id: customerId,
+          full_name: customerDetails.name,
+          phone_number: phone,
+          email: customerDetails.email || '',
+          loyalty_points: existingCustomer ? undefined : 0
+        }, { onConflict: 'id' });
+      } catch (custErr) {
+        console.log('Error syncing to customers table:', custErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       order: orderData,

@@ -169,6 +169,7 @@ export default function CheckoutPage() {
           couponCode: promoCode || null,
           shippingFee: shippingFee,
           customerDetails: {
+            userId: user?.id,
             name, email, phone,
             shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
             billingAddress: sameAsShipping ? 
@@ -204,6 +205,7 @@ export default function CheckoutPage() {
           couponCode: promoCode || null,
           shippingFee: shippingFee,
           customerDetails: {
+            userId: user?.id,
             name, email, phone,
             shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
             billingAddress: sameAsShipping ? 

@@ -10,6 +10,7 @@ import { supabase } from "../../supabase";
 import CouponsTab from "./CouponsTab";
 import InstructionsTab from "./InstructionsTab";
 import PromoPopupTab from "./PromoPopupTab";
+import UsersTab from "./UsersTab";
 import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
@@ -1308,6 +1309,12 @@ export default function AdminPage() {
             <i className="fa-solid fa-dolly"></i> Orders Queue
           </button>
           <button 
+            className={`tab-btn ${activeTab === "users" ? "active" : ""}`}
+            onClick={() => setActiveTab("users")}
+          >
+            <i className="fa-solid fa-users"></i> Users & Customers
+          </button>
+          <button 
             className={`tab-btn ${activeTab === "inventory" ? "active" : ""}`}
             onClick={() => setActiveTab("inventory")}
           >
@@ -2517,7 +2524,10 @@ export default function AdminPage() {
       {/* Tab 3: Coupons */}
       {activeTab === "coupons" && <CouponsTab />}
 
-      {/* Tab 4: Instructions */}
+      {/* Tab 4: Users & Customers */}
+      {activeTab === "users" && <UsersTab />}
+
+      {/* Tab 5: Instructions */}
       {activeTab === "instructions" && <InstructionsTab />}
 
       {/* Floating Luxury Toast Notification Banner */}
