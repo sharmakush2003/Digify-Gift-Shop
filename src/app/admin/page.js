@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import Papa from "papaparse";
+import { getProductMediaUrls } from "../utils/imageUtils";
 import "./admin.css";
 
 export default function AdminPage() {
@@ -42,6 +43,7 @@ export default function AdminPage() {
 
   // Editing modals states
   const [editingProduct, setEditingProduct] = useState(null);
+  const [aligningImage, setAligningImage] = useState(null); // { url, fit, x, y }
   const [showComboModal, setShowComboModal] = useState(false);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
 
@@ -135,7 +137,14 @@ export default function AdminPage() {
     try {
       const { data, error } = await supabase.from('products').select('*');
       if (error) throw error;
-      let productsData = data || [];
+      let productsData = (data || []).map(p => {
+        const media = getProductMediaUrls(p);
+        return {
+          ...p,
+          youtube_url: p.youtube_url || media.youtube_url || '',
+          instagram_url: p.instagram_url || media.instagram_url || ''
+        };
+      });
       // Sort products by ID or keep original order
       productsData.sort((a, b) => parseInt(a.id) - parseInt(b.id));
       setProductsList(productsData);
@@ -337,17 +346,48 @@ export default function AdminPage() {
         description: newProduct.description,
         fragile: newProduct.fragile,
         microwave: newProduct.microwave,
+        youtube_url: newProduct.youtube_url || '',
+        instagram_url: newProduct.instagram_url || '',
         image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg'
       };
 
-      const { error: insertError } = await supabase.from('products').insert(newProductRecord);
-      if (insertError) throw insertError;
+      if (typeof window !== 'undefined' && id) {
+        try {
+          const mediaMap = JSON.parse(localStorage.getItem('orient_product_media_urls') || '{}');
+          const mediaObj = {
+            youtube_url: newProduct.youtube_url || '',
+            instagram_url: newProduct.instagram_url || ''
+          };
+          mediaMap[id] = mediaObj;
+          mediaMap[String(id)] = mediaObj;
+          localStorage.setItem('orient_product_media_urls', JSON.stringify(mediaMap));
+        } catch (e) {}
+      }
+
+      let insertErr = null;
+      try {
+        const { error } = await supabase.from('products').insert(newProductRecord);
+        insertErr = error;
+      } catch (err) {
+        insertErr = err;
+      }
+
+      if (insertErr && (insertErr.code === 'PGRST204' || (insertErr.message && (insertErr.message.includes('youtube_url') || insertErr.message.includes('instagram_url'))))) {
+        const fallbackRecord = { ...newProductRecord };
+        delete fallbackRecord.youtube_url;
+        delete fallbackRecord.instagram_url;
+        const { error: retryError } = await supabase.from('products').insert(fallbackRecord);
+        if (retryError) throw retryError;
+      } else if (insertErr) {
+        throw insertErr;
+      }
 
       triggerToast("Product added successfully!");
       setShowAddProductModal(false);
       setNewProduct({
         name: "", price: "", stock: "", stockStatus: "Available", department: "Crockery & Dining",
-        barcode: "", hsn: "", gst: 18, description: "", fragile: false, microwave: false, category: "General"
+        barcode: "", hsn: "", gst: 18, description: "", fragile: false, microwave: false, category: "General",
+        youtube_url: "", instagram_url: ""
       });
       setSingleUploadImages([]);
       loadDbData();
@@ -590,15 +630,46 @@ export default function AdminPage() {
       soldCount: parseInt(editingProduct.soldCount) || 0,
       gst: parseFloat(editingProduct.gst) || 18,
       rating,
-      reviewCount: reviews.length
+      reviewCount: reviews.length,
+      youtube_url: editingProduct.youtube_url || '',
+      instagram_url: editingProduct.instagram_url || ''
     };
     
     // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
     delete updated.stockStatus;
 
+    // Persist local backup of image_settings & media URLs
+    if (typeof window !== 'undefined' && updated.id) {
+      try {
+        if (updated.image_settings) {
+          const localMap = JSON.parse(localStorage.getItem('orient_image_settings') || '{}');
+          localMap[updated.id] = updated.image_settings;
+          localStorage.setItem('orient_image_settings', JSON.stringify(localMap));
+        }
+
+        const mediaMap = JSON.parse(localStorage.getItem('orient_product_media_urls') || '{}');
+        const mediaObj = {
+          youtube_url: updated.youtube_url || '',
+          instagram_url: updated.instagram_url || ''
+        };
+        mediaMap[updated.id] = mediaObj;
+        mediaMap[String(updated.id)] = mediaObj;
+        localStorage.setItem('orient_product_media_urls', JSON.stringify(mediaMap));
+      } catch (e) {}
+    }
+
     const updateProductInSupabase = async () => {
       try {
-        await supabase.from('products').upsert(updated);
+        let { error } = await supabase.from('products').upsert(updated);
+        if (error && (error.code === 'PGRST204' || (error.message && (error.message.includes('image_settings') || error.message.includes('youtube_url') || error.message.includes('instagram_url'))))) {
+          const fallback = { ...updated };
+          delete fallback.image_settings;
+          delete fallback.youtube_url;
+          delete fallback.instagram_url;
+          const retryRes = await supabase.from('products').upsert(fallback);
+          error = retryRes.error;
+        }
+        if (error) throw error;
         loadDbData();
         setEditingProduct(null);
         setSingleUploadImages([]);
@@ -1623,7 +1694,14 @@ export default function AdminPage() {
                         <div style={{ display: "flex", gap: "8px" }}>
                           <button 
                             className="btn btn-outline btn-sm" 
-                            onClick={() => setEditingProduct({ ...p })}
+                            onClick={() => {
+                              const media = getProductMediaUrls(p);
+                              setEditingProduct({ 
+                                ...p,
+                                youtube_url: p.youtube_url || media.youtube_url || "",
+                                instagram_url: p.instagram_url || media.instagram_url || ""
+                              });
+                            }}
                           >
                             <i className="fa-regular fa-pen-to-square"></i> Edit
                           </button>
@@ -1746,13 +1824,18 @@ export default function AdminPage() {
                 </div>
                 <div className="form-group">
                   <span className="form-label">GST Rate (%)</span>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    placeholder="18"
-                    value={newProduct.gst}
+                  <select 
+                    className="sort-select"
+                    style={{ width: "100%", padding: "10px 14px" }}
+                    value={newProduct.gst || "18"}
                     onChange={(e) => setNewProduct({ ...newProduct, gst: e.target.value })}
-                  />
+                  >
+                    <option value="5">5% GST</option>
+                    <option value="18">18% GST</option>
+                    <option value="0">0% (Exempted)</option>
+                    <option value="12">12% GST</option>
+                    <option value="28">28% GST</option>
+                  </select>
                 </div>
                 <div className="form-group full-width">
                   <span className="form-label">Department</span>
@@ -1813,6 +1896,44 @@ export default function AdminPage() {
                     />
                     <span>Microwave Safe</span>
                   </label>
+                </div>
+
+                {/* Product Social Reel & Video Links Box */}
+                <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1", marginTop: "10px" }}>
+                  <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <i className="fa-solid fa-video" style={{ color: "#2563eb" }}></i> Product Video & Reel Showcase (Optional)
+                  </h4>
+                  <p style={{ margin: "0 0 12px 0", fontSize: "0.78rem", color: "#64748b" }}>
+                    Add Instagram Reel or YouTube Video links to showcase live product demos directly inside the customer modal.
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="form-group">
+                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                        <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
+                      </span>
+                      <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://www.instagram.com/reel/..."
+                        value={newProduct.instagram_url || ""}
+                        onChange={(e) => setNewProduct({ ...newProduct, instagram_url: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                        <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
+                      </span>
+                      <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={newProduct.youtube_url || ""}
+                        onChange={(e) => setNewProduct({ ...newProduct, youtube_url: e.target.value })}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1915,12 +2036,18 @@ export default function AdminPage() {
 
                 <div className="form-group">
                   <span className="form-label">GST Rate (%)</span>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    value={editingProduct.gst || 18}
+                  <select 
+                    className="sort-select"
+                    style={{ width: "100%", padding: "10px 14px" }}
+                    value={editingProduct.gst || "18"}
                     onChange={(e) => setEditingProduct({ ...editingProduct, gst: e.target.value })}
-                  />
+                  >
+                    <option value="5">5% GST</option>
+                    <option value="18">18% GST</option>
+                    <option value="0">0% (Exempted)</option>
+                    <option value="12">12% GST</option>
+                    <option value="28">28% GST</option>
+                  </select>
                 </div>
 
                 <div className="form-group full-width">
@@ -1942,7 +2069,9 @@ export default function AdminPage() {
                 <div className="form-group full-width">
                   <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>Existing Images</span>
-                    <span style={{ fontSize: "0.75rem", color: "#e63946", fontWeight: "500", backgroundColor: "#ffe3e3", padding: "3px 8px", borderRadius: "12px" }}>Click 'X' to delete</span>
+                    <span style={{ fontSize: "0.75rem", color: "#4318ff", fontWeight: "600", backgroundColor: "#e0e7ff", padding: "3px 10px", borderRadius: "12px" }}>
+                      Click 'Align & Fit' to adjust position
+                    </span>
                   </span>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1.5px solid #cbd5e1" }}>
                     {(() => {
@@ -1950,33 +2079,70 @@ export default function AdminPage() {
                       if (currentImages.length === 0) {
                         return <p style={{ fontSize: "0.9rem", color: "#64748b", margin: 0, fontStyle: "italic" }}>No images currently attached to this product.</p>;
                       }
-                      return currentImages.map((imgUrl, idx) => (
-                        <div key={idx} style={{ position: "relative", width: "70px", height: "70px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1", backgroundColor: "#fff" }}>
-                          <img src={imgUrl} alt={`Product ${idx}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                          <button 
-                            type="button"
-                            title="Delete Image"
-                            onClick={() => {
-                              if (window.confirm("Remove this image?")) {
-                                const newImages = currentImages.filter((_, i) => i !== idx);
-                                setEditingProduct({ 
-                                  ...editingProduct, 
-                                  images: newImages, 
-                                  image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                      const settingsMap = editingProduct.image_settings || {};
+                      return currentImages.map((imgUrl, idx) => {
+                        const imgConfig = settingsMap[imgUrl] || { fit: 'cover', x: 50, y: 50 };
+                        return (
+                          <div key={idx} style={{ position: "relative", width: "90px", height: "90px", borderRadius: "8px", overflow: "hidden", border: "1.5px solid #cbd5e1", backgroundColor: "#fff" }}>
+                            <img 
+                              src={imgUrl} 
+                              alt={`Product ${idx}`} 
+                              style={{ 
+                                width: "100%", 
+                                height: "100%", 
+                                objectFit: imgConfig.fit || "cover", 
+                                objectPosition: `${imgConfig.x ?? 50}% ${imgConfig.y ?? 50}%`,
+                                transform: imgConfig.zoom && imgConfig.zoom !== 1 ? `scale(${imgConfig.zoom})` : 'none'
+                              }} 
+                            />
+                            <button 
+                              type="button"
+                              title="Delete Image"
+                              onClick={() => {
+                                if (window.confirm("Remove this image?")) {
+                                  const newImages = currentImages.filter((_, i) => i !== idx);
+                                  setEditingProduct({ 
+                                    ...editingProduct, 
+                                    images: newImages, 
+                                    image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                                  });
+                                }
+                              }}
+                              style={{ 
+                                position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
+                                color: "white", border: "none", borderRadius: "50%", width: "20px", height: "20px", 
+                                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
+                                fontSize: "0.7rem", zIndex: 10
+                              }}
+                            >
+                              <i className="fa-solid fa-xmark"></i>
+                            </button>
+                            <button 
+                              type="button"
+                              title="Adjust Alignment & Fit"
+                              onClick={() => {
+                                setAligningImage({
+                                  url: imgUrl,
+                                  index: idx,
+                                  fit: imgConfig.fit || 'cover',
+                                  x: imgConfig.x !== undefined ? imgConfig.x : 50,
+                                  y: imgConfig.y !== undefined ? imgConfig.y : 50,
+                                  zoom: imgConfig.zoom !== undefined ? imgConfig.zoom : 1
                                 });
-                              }
-                            }}
-                            style={{ 
-                              position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
-                              color: "white", border: "none", borderRadius: "50%", width: "20px", height: "20px", 
-                              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
-                              fontSize: "0.7rem", zIndex: 10
-                            }}
-                          >
-                            <i className="fa-solid fa-xmark"></i>
-                          </button>
-                        </div>
-                      ));
+                              }}
+                              style={{ 
+                                position: "absolute", bottom: "4px", left: "4px", right: "4px", 
+                                background: "rgba(15, 23, 42, 0.85)", color: "#fff", border: "none", 
+                                borderRadius: "4px", padding: "3px 4px", fontSize: "0.65rem", 
+                                fontWeight: "600", cursor: "pointer", display: "flex", 
+                                alignItems: "center", justifyContent: "center", gap: "4px", zIndex: 10
+                              }}
+                            >
+                              <i className="fa-solid fa-sliders"></i> Align & Fit
+                            </button>
+                          </div>
+                        );
+                      });
                     })()}
                   </div>
                 </div>
@@ -2015,6 +2181,43 @@ export default function AdminPage() {
                     />
                     <span>Microwave Safe</span>
                   </label>
+                </div>
+                {/* Product Social Reel & Video Links Box */}
+                <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <i className="fa-solid fa-video" style={{ color: "#2563eb" }}></i> Product Video & Reel Showcase (Optional)
+                  </h4>
+                  <p style={{ margin: "0 0 12px 0", fontSize: "0.78rem", color: "#64748b" }}>
+                    Add Instagram Reel or YouTube Video links to showcase live product demos directly inside the customer modal.
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="form-group">
+                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                        <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
+                      </span>
+                      <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://www.instagram.com/reel/..."
+                        value={editingProduct.instagram_url || ""}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, instagram_url: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                        <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
+                      </span>
+                      <input 
+                        type="url" 
+                        className="form-input" 
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={editingProduct.youtube_url || ""}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, youtube_url: e.target.value })}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Customer Reviews Management Box */}
@@ -2072,7 +2275,7 @@ export default function AdminPage() {
                       editingProduct.reviews.map(rev => (
                         <div key={rev.id} style={{ fontSize: "0.8rem", padding: "8px 12px", background: "#fff", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "600", marginBottom: "4px", color: "#1e293b" }}>
-                            <span>{rev.reviewerName} ({rev.rating}★)</span>
+                            <span>{rev.reviewerName} ({rev.rating}{'★'})</span>
                             <button 
                               type="button"
                               onClick={() => handleDeleteReview(rev.id)}
@@ -2590,6 +2793,178 @@ export default function AdminPage() {
         </button>
       </div>
       </div>
+
+      {/* Image Alignment & Fit Modal */}
+      {aligningImage && (
+        <div className="image-align-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setAligningImage(null); }}>
+          <div className="image-align-modal-card">
+            <div className="image-align-header">
+              <h3><i className="fa-solid fa-sliders" style={{ color: "#4318ff" }}></i> Image Alignment & Fit Editor</h3>
+              <button 
+                type="button"
+                onClick={() => setAligningImage(null)}
+                style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "#64748b" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="image-align-body">
+              {/* Controls */}
+              <div className="align-controls-section">
+                <div className="align-control-group">
+                  <label>Image Fitting Mode</label>
+                  <div className="fit-option-buttons">
+                    <button 
+                      type="button" 
+                      className={`fit-btn ${aligningImage.fit === 'cover' ? 'active' : ''}`}
+                      onClick={() => setAligningImage({ ...aligningImage, fit: 'cover' })}
+                    >
+                      Cover (Fill & Crop)
+                    </button>
+                    <button 
+                      type="button" 
+                      className={`fit-btn ${aligningImage.fit === 'contain' ? 'active' : ''}`}
+                      onClick={() => setAligningImage({ ...aligningImage, fit: 'contain' })}
+                    >
+                      Contain (Whole Image)
+                    </button>
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>
+                    {aligningImage.fit === 'cover' ? 'Scales to fill frame. Use sliders below to align product center.' : 'Fits entire image inside frame without cropping.'}
+                  </span>
+                </div>
+
+                <div className="align-control-group">
+                  <label>
+                    <span>Vertical Position (Y-Axis)</span>
+                    <span style={{ color: "#4318ff", fontWeight: "700" }}>{aligningImage.y}%</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    value={aligningImage.y} 
+                    onChange={(e) => setAligningImage({ ...aligningImage, y: parseInt(e.target.value) })}
+                    className="align-slider"
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#94a3b8" }}>
+                    <span>0% (Top)</span>
+                    <span>50% (Center)</span>
+                    <span>100% (Bottom)</span>
+                  </div>
+                </div>
+
+                <div className="align-control-group">
+                  <label>
+                    <span>Horizontal Position (X-Axis)</span>
+                    <span style={{ color: "#4318ff", fontWeight: "700" }}>{aligningImage.x}%</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    value={aligningImage.x} 
+                    onChange={(e) => setAligningImage({ ...aligningImage, x: parseInt(e.target.value) })}
+                    className="align-slider"
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#94a3b8" }}>
+                    <span>0% (Left)</span>
+                    <span>50% (Center)</span>
+                    <span>100% (Right)</span>
+                  </div>
+                </div>
+
+                <div className="align-control-group">
+                  <label>
+                    <span>Image Zoom / Scale</span>
+                    <span style={{ color: "#4318ff", fontWeight: "700" }}>{Math.round((aligningImage.zoom || 1) * 100)}%</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="100" 
+                    max="250" 
+                    step="5"
+                    value={Math.round((aligningImage.zoom || 1) * 100)} 
+                    onChange={(e) => setAligningImage({ ...aligningImage, zoom: parseFloat(e.target.value) / 100 })}
+                    className="align-slider"
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "#94a3b8" }}>
+                    <span>100% (Normal)</span>
+                    <span>175%</span>
+                    <span>250% (Zoomed)</span>
+                  </div>
+                </div>
+
+                {/* Helpful tip box explaining CSS behavior */}
+                <div style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "10px 12px", borderRadius: "8px", fontSize: "0.78rem", color: "#1e40af", marginTop: "4px" }}>
+                  <strong><i className="fa-solid fa-circle-info"></i> How Alignment Works:</strong>
+                  <ul style={{ margin: "4px 0 0 16px", padding: 0, lineHeight: 1.4 }}>
+                    <li><strong>Cover (Fill & Crop):</strong> On tall/portrait images, height crops vertically so Y-axis shifts up/down. To enable X-axis movement on portrait photos, increase <strong>Zoom</strong> above 100%.</li>
+                    <li><strong>Contain (Whole Image):</strong> On tall/portrait images, sides have empty space so X-axis shifts left/right. To enable Y-axis movement, increase <strong>Zoom</strong> above 100%.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Live Customer Panel Preview */}
+              <div className="align-preview-section">
+                <div className="align-preview-badge">
+                  <i className="fa-solid fa-eye"></i> Live Customer Panel View
+                </div>
+                <div className="preview-card-frame">
+                  <div className="preview-img-container">
+                    <img 
+                      src={aligningImage.url} 
+                      alt="Live Preview" 
+                      style={{ 
+                        width: "100%", 
+                        height: "100%", 
+                        objectFit: aligningImage.fit, 
+                        objectPosition: `${aligningImage.x}% ${aligningImage.y}%`,
+                        transform: aligningImage.zoom && aligningImage.zoom !== 1 ? `scale(${aligningImage.zoom})` : 'none'
+                      }} 
+                    />
+                  </div>
+                  <div className="preview-card-details">
+                    <div className="preview-card-title">{editingProduct?.name || 'Product Title'}</div>
+                    <div className="preview-card-price">₹{editingProduct?.price || '999'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="image-align-footer">
+              <button 
+                type="button"
+                onClick={() => setAligningImage({ ...aligningImage, fit: 'cover', x: 50, y: 50, zoom: 1 })}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#f1f5f9", color: "#475569", fontWeight: "600", cursor: "pointer" }}
+              >
+                Reset Defaults
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  const updatedSettings = {
+                    ...(editingProduct.image_settings || {}),
+                    [aligningImage.url]: {
+                      fit: aligningImage.fit,
+                      x: aligningImage.x,
+                      y: aligningImage.y,
+                      zoom: aligningImage.zoom || 1
+                    }
+                  };
+                  setEditingProduct({ ...editingProduct, image_settings: updatedSettings });
+                  setAligningImage(null);
+                  triggerToast("Image alignment updated!");
+                }}
+                style={{ padding: "8px 20px", borderRadius: "8px", border: "none", background: "#4318ff", color: "#fff", fontWeight: "700", cursor: "pointer", boxShadow: "0 4px 12px rgba(67, 24, 255, 0.3)" }}
+              >
+                <i className="fa-solid fa-check"></i> Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

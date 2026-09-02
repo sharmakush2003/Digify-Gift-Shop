@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { getProducts, getOrders } from "../db";
 import { useAuth } from "./AuthContext";
 import { supabase } from "../../supabase";
+import { getProductMediaUrls } from "../utils/imageUtils";
 
 const AppContext = createContext();
 
@@ -44,7 +45,15 @@ export function AppProvider({ children }) {
         if (error) throw error;
         
         if (data && data.length > 0) {
-          setProducts(data);
+          const merged = data.map(p => {
+            const media = getProductMediaUrls(p);
+            return {
+              ...p,
+              youtube_url: p.youtube_url || media.youtube_url || '',
+              instagram_url: p.instagram_url || media.instagram_url || ''
+            };
+          });
+          setProducts(merged);
         } else {
           setProducts(getProducts());
         }

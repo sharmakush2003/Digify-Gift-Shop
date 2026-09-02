@@ -4,6 +4,9 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useApp } from "./context/AppContext";
+import { getImageStyle } from "./utils/imageUtils";
+import ProductImageZoomViewer from "./components/ProductImageZoomViewer";
+import ProductVideoEmbed from "./components/ProductVideoEmbed";
 
 const getValidImageUrl = (src) => {
   if (!src || typeof src !== 'string') return "/images/acacia_wood_casserole.png";
@@ -321,7 +324,7 @@ export default function Home() {
                     fill 
                     sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                     className="product-image" 
-                    style={{ objectFit: 'cover' }}
+                    style={getImageStyle(product, product.image, 'cover')}
                   />
                   <button 
                     className={`wishlist-btn ${inWish ? "active" : ""}`}
@@ -387,16 +390,11 @@ export default function Home() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <div style={{ position: 'relative', width: '100%', height: '350px', flex: 1, minHeight: '300px' }}>
-                <Image 
-                  src={activeImage || selectedProduct.image} 
-                  alt={selectedProduct.name} 
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  style={{ objectFit: 'contain', padding: '1rem', backgroundColor: 'var(--bg-alt)' }}
-                  priority
-                />
-              </div>
+              <ProductImageZoomViewer 
+                product={selectedProduct} 
+                activeImage={activeImage} 
+                getValidImageUrl={getValidImageUrl} 
+              />
               {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
                 <div className="thumbnail-gallery" style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', width: '100%', justifyContent: 'center' }}>
                   {selectedProduct.images.map((img, idx) => (
@@ -408,7 +406,7 @@ export default function Home() {
                       height={55}
                       className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
                       onClick={() => setActiveImage(img)}
-                      style={{ objectFit: 'cover', cursor: 'pointer', borderRadius: '6px' }}
+                      style={{ ...getImageStyle(selectedProduct, img, 'cover'), cursor: 'pointer', borderRadius: '6px' }}
                     />
                   ))}
                 </div>
@@ -471,6 +469,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              {/* Embedded YouTube & Instagram Video Showcase */}
+              <ProductVideoEmbed product={selectedProduct} />
             </div>
           </div>
         </div>

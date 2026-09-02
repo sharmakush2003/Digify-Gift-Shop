@@ -5,6 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useApp } from "../context/AppContext";
 import Link from "next/link";
 import Image from "next/image";
+import { getImageStyle } from "../utils/imageUtils";
+import ProductImageZoomViewer from "../components/ProductImageZoomViewer";
+import ProductVideoEmbed from "../components/ProductVideoEmbed";
 
 const getValidImageUrl = (src) => {
   if (!src || typeof src !== 'string') return "/images/acacia_wood_casserole.png";
@@ -301,7 +304,7 @@ function CatalogContent() {
                         fill 
                         sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                         className="product-image" 
-                        style={{ objectFit: 'cover' }}
+                        style={getImageStyle(product, product.image, 'cover')}
                       />
                       <button 
                         className={`wishlist-btn ${inWish ? "active" : ""}`}
@@ -348,16 +351,11 @@ function CatalogContent() {
               <i className="fa-solid fa-xmark"></i>
             </button>
             <div className="modal-img-side">
-              <div style={{ position: 'relative', width: '100%', height: '350px', flex: 1, minHeight: '300px' }}>
-                <Image 
-                  src={getValidImageUrl(activeImage || selectedProduct.image)} 
-                  alt={selectedProduct.name} 
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  style={{ objectFit: 'contain', padding: '1rem', backgroundColor: 'var(--bg-alt)' }}
-                  priority
-                />
-              </div>
+              <ProductImageZoomViewer 
+                product={selectedProduct} 
+                activeImage={activeImage} 
+                getValidImageUrl={getValidImageUrl} 
+              />
               {selectedProduct.images && Array.isArray(selectedProduct.images) && selectedProduct.images.length > 1 && (
                 <div className="thumbnail-gallery" style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', width: '100%', justifyContent: 'center' }}>
                   {selectedProduct.images.map((img, idx) => (
@@ -369,7 +367,7 @@ function CatalogContent() {
                       height={55}
                       className={`thumbnail ${(activeImage === img || (!activeImage && selectedProduct.image === img)) ? 'active' : ''}`}
                       onClick={() => setActiveImage(img)}
-                      style={{ objectFit: 'cover', cursor: 'pointer', borderRadius: '6px' }}
+                      style={{ ...getImageStyle(selectedProduct, img, 'cover'), cursor: 'pointer', borderRadius: '6px' }}
                     />
                   ))}
                 </div>
@@ -433,6 +431,9 @@ function CatalogContent() {
                 </div>
               </div>
 
+              {/* Embedded YouTube & Instagram Video Showcase */}
+              <ProductVideoEmbed product={selectedProduct} />
+
               {selectedProduct.reviews && selectedProduct.reviews.length > 0 && (
                 <div style={{ marginTop: "1.5rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.2rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1rem" }}>
@@ -441,7 +442,7 @@ function CatalogContent() {
                       {selectedProduct.reviews.length} {selectedProduct.reviews.length === 1 ? 'Review' : 'Reviews'}
                     </span>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "200px", overflowY: "auto", paddingRight: "8px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {selectedProduct.reviews.map((review, idx) => {
                       const initial = review.reviewerName ? review.reviewerName.charAt(0).toUpperCase() : "U";
                       const dateObj = review.timestamp ? new Date(review.timestamp) : new Date();
