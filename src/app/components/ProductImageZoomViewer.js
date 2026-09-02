@@ -8,10 +8,11 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   
   // Lightbox zoom & pan state
-  const [zoomLevel, setZoomLevel] = useState(1.8);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [panPos, setPanPos] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [touchDistStart, setTouchDistStart] = useState(null);
   const [currentImg, setCurrentImg] = useState(activeImage || product?.image);
 
   useEffect(() => {
@@ -36,13 +37,13 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
 
   const openLightbox = () => {
     setIsLightboxOpen(true);
-    setZoomLevel(1.8); // Default opening zoom scale
+    setZoomLevel(1); // Default clean 1.0x scale on open
     setPanPos({ x: 0, y: 0 });
   };
 
   const closeLightbox = () => {
     setIsLightboxOpen(false);
-    setZoomLevel(1.8);
+    setZoomLevel(1);
     setPanPos({ x: 0, y: 0 });
   };
 
@@ -55,7 +56,7 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLightboxOpen]);
 
-  // Mouse / Touch Drag Handlers
+  // Mouse / Touch Drag & Pinch Handlers
   const handleMouseDown = (e) => {
     setIsDragging(true);
     setDragStart({ x: e.clientX - panPos.x, y: e.clientY - panPos.y });
@@ -70,28 +71,46 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
     }
   };
 
-  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setTouchDistStart(null);
+  };
 
   const handleTouchStart = (e) => {
     if (e.touches.length === 1) {
       setIsDragging(true);
       setDragStart({ x: e.touches[0].clientX - panPos.x, y: e.touches[0].clientY - panPos.y });
+    } else if (e.touches.length === 2) {
+      setIsDragging(false);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setTouchDistStart(dist);
     }
   };
 
   const handleTouchMove = (e) => {
-    if (isDragging && e.touches.length === 1) {
+    if (e.touches.length === 1 && isDragging) {
       setPanPos({
         x: e.touches[0].clientX - dragStart.x,
         y: e.touches[0].clientY - dragStart.y
       });
+    } else if (e.touches.length === 2 && touchDistStart) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / touchDistStart;
+      setZoomLevel((prev) => Math.max(1, Math.min(3.5, prev * (factor > 1 ? 1.04 : 0.96))));
+      setTouchDistStart(dist);
     }
   };
 
   const handleWheel = (e) => {
     if (!isLightboxOpen) return;
-    const delta = e.deltaY < 0 ? 0.25 : -0.25;
-    setZoomLevel((prev) => Math.max(1, Math.min(4, prev + delta)));
+    const delta = e.deltaY < 0 ? 0.2 : -0.2;
+    setZoomLevel((prev) => Math.max(1, Math.min(3.5, prev + delta)));
   };
 
   return (
@@ -187,13 +206,13 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.92)',
+            backgroundColor: 'rgba(0, 0, 0, 0.94)',
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '12px 16px'
+            padding: '12px'
           }}
           onWheel={handleWheel}
           onMouseMove={handleMouseDrag}
@@ -201,49 +220,94 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
           onTouchMove={handleTouchMove}
           onTouchEnd={handleMouseUp}
         >
-          {/* Top Bar - Header & Close */}
+          {/* Top Bar - Non-overlapping absolute Close Button & Controls */}
+          <button
+            type="button"
+            onClick={closeLightbox}
+            aria-label="Close Zoom View"
+            style={{
+              position: 'absolute',
+              top: '14px',
+              right: '14px',
+              background: 'rgba(255, 255, 255, 0.25)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              color: '#ffffff',
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              fontSize: '1.6rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+              zIndex: 100010,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#ef4444'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)'}
+          >
+            &times;
+          </button>
+
+          {/* Top Left Helper Text & On-Screen Zoom Controls */}
           <div style={{
             width: '100%',
-            maxWidth: '1200px',
+            maxWidth: '1000px',
             display: 'flex',
-            justify: 'space-between',
             alignItems: 'center',
-            zIndex: 100000,
-            padding: '4px 0'
+            justify: 'space-between',
+            zIndex: 100005,
+            padding: '6px 44px 6px 6px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#cbd5e1' }}>
-                <i className="fa-solid fa-up-down-left-right" style={{ color: '#38bdf8', marginRight: '6px' }}></i>
-                Drag or scroll to move image
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <i className="fa-solid fa-up-down-left-right" style={{ color: '#38bdf8', fontSize: '0.8rem' }}></i>
+              <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#e2e8f0' }}>
+                Pinch / Double-tap to zoom
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={closeLightbox}
-              style={{
-                background: 'rgba(255, 255, 255, 0.2)',
-                border: 'none',
-                color: '#ffffff',
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                cursor: 'pointer',
-                fontSize: '1.4rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backdropFilter: 'blur(4px)',
-                transition: 'background 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#ef4444'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
-            >
-              &times;
-            </button>
+            {/* Quick Zoom Buttons (+ / - / Reset) */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              padding: '2px 6px',
+              borderRadius: '20px',
+              backdropFilter: 'blur(4px)'
+            }}>
+              <button 
+                type="button" 
+                onClick={() => setZoomLevel(prev => Math.max(1, prev - 0.3))}
+                style={{ background: 'none', border: 'none', color: '#ffffff', fontSize: '0.9rem', cursor: 'pointer', padding: '2px 6px' }}
+                title="Zoom Out"
+              >
+                <i className="fa-solid fa-minus"></i>
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => { setZoomLevel(1); setPanPos({ x: 0, y: 0 }); }}
+                style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: '0.7rem', fontWeight: '700', cursor: 'pointer', padding: '2px 4px' }}
+                title="Reset Zoom"
+              >
+                {Math.round(zoomLevel * 100)}%
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => setZoomLevel(prev => Math.min(3.5, prev + 0.3))}
+                style={{ background: 'none', border: 'none', color: '#ffffff', fontSize: '0.9rem', cursor: 'pointer', padding: '2px 6px' }}
+                title="Zoom In"
+              >
+                <i className="fa-solid fa-plus"></i>
+              </button>
+            </div>
           </div>
 
-          {/* Clean Main Image Pan & Zoom View */}
+          {/* Clean Fullscreen Image View */}
           <div 
             style={{
               flex: 1,
@@ -253,13 +317,14 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
               justifyContent: 'center',
               overflow: 'hidden',
               position: 'relative',
-              cursor: isDragging ? 'grabbing' : 'grab'
+              cursor: isDragging ? 'grabbing' : 'grab',
+              padding: '10px 0'
             }}
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
             onDoubleClick={() => {
-              if (zoomLevel === 1) {
-                setZoomLevel(2.2);
+              if (zoomLevel <= 1.1) {
+                setZoomLevel(2.0);
               } else {
                 setZoomLevel(1);
                 setPanPos({ x: 0, y: 0 });
@@ -270,8 +335,8 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
               src={validUrl} 
               alt={product?.name}
               style={{
-                maxHeight: '84vh',
-                maxWidth: '94vw',
+                maxHeight: '82vh',
+                maxWidth: '92vw',
                 objectFit: 'contain',
                 transform: `translate(${panPos.x}px, ${panPos.y}px) scale(${zoomLevel})`,
                 transition: isDragging ? 'none' : 'transform 0.15s ease-out',
@@ -291,7 +356,7 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
               borderRadius: '30px',
               maxWidth: '90vw',
               overflowX: 'auto',
-              zIndex: 100000,
+              zIndex: 100005,
               backdropFilter: 'blur(6px)'
             }}>
               {imagesList.map((img, idx) => {
@@ -305,11 +370,11 @@ export default function ProductImageZoomViewer({ product, activeImage, getValidI
                     onClick={() => {
                       setCurrentImg(img);
                       setPanPos({ x: 0, y: 0 });
-                      setZoomLevel(1.8);
+                      setZoomLevel(1);
                     }}
                     style={{
-                      width: '46px',
-                      height: '46px',
+                      width: '44px',
+                      height: '44px',
                       objectFit: 'cover',
                       borderRadius: '50%',
                       cursor: 'pointer',
