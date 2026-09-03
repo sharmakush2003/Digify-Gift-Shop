@@ -2403,12 +2403,17 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Existing Images Gallery */}
+                {/* Existing Images Gallery with Reordering Controls */}
                 <div className="form-group full-width">
+                  <div style={{ background: "#e0f2fe", padding: "10px 14px", borderRadius: "10px", border: "1px solid #bae6fd", marginBottom: "12px", fontSize: "0.82rem", color: "#0369a1", lineHeight: "1.4" }}>
+                    <i className="fa-solid fa-circle-info" style={{ marginRight: "6px", color: "#0284c7" }}></i>
+                    <b>Main Cover Image Rule:</b> The <b>First Photo (Position #1)</b> will serve as the <b>Main Catalog Display Image</b> across the entire store. Use <code>◀ Left</code> and <code>▶ Right</code> to adjust image sequence.
+                  </div>
+
                   <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>Existing Images</span>
+                    <span>Existing Images & Display Sequence</span>
                     <span style={{ fontSize: "0.75rem", color: "#4318ff", fontWeight: "600", backgroundColor: "#e0e7ff", padding: "3px 10px", borderRadius: "12px" }}>
-                      Click 'Align & Fit' to adjust position
+                      Click 'Align & Fit' to adjust zoom
                     </span>
                   </span>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1.5px solid #cbd5e1" }}>
@@ -2421,63 +2426,102 @@ export default function AdminPage() {
                       return currentImages.map((imgUrl, idx) => {
                         const imgConfig = settingsMap[imgUrl] || { fit: 'cover', x: 50, y: 50 };
                         return (
-                          <div key={idx} style={{ position: "relative", width: "90px", height: "90px", borderRadius: "8px", overflow: "hidden", border: "1.5px solid #cbd5e1", backgroundColor: "#fff" }}>
-                            <img 
-                              src={imgUrl} 
-                              alt={`Product ${idx}`} 
-                              style={{ 
-                                width: "100%", 
-                                height: "100%", 
-                                objectFit: imgConfig.fit || "cover", 
-                                objectPosition: `${imgConfig.x ?? 50}% ${imgConfig.y ?? 50}%`,
-                                transform: imgConfig.zoom && imgConfig.zoom !== 1 ? `scale(${imgConfig.zoom})` : 'none'
-                              }} 
-                            />
-                            <button 
-                              type="button"
-                              title="Delete Image"
-                              onClick={() => {
-                                if (window.confirm("Remove this image?")) {
-                                  const newImages = currentImages.filter((_, i) => i !== idx);
-                                  setEditingProduct({ 
-                                    ...editingProduct, 
-                                    images: newImages, 
-                                    image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                          <div key={idx} style={{ position: "relative", width: "110px", height: "120px", borderRadius: "8px", overflow: "hidden", border: idx === 0 ? "2px solid #2563eb" : "1.5px solid #cbd5e1", backgroundColor: "#fff", display: "flex", flexDirection: "column" }}>
+                            {/* Position Badge */}
+                            <div style={{ position: "absolute", top: "4px", left: "4px", background: idx === 0 ? "#2563eb" : "rgba(15, 23, 42, 0.75)", color: "#fff", padding: "2px 6px", borderRadius: "4px", fontSize: "0.65rem", fontWeight: "700", zIndex: 10 }}>
+                              {idx === 0 ? "★ Cover #1" : `#${idx + 1}`}
+                            </div>
+
+                            <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
+                              <img 
+                                src={imgUrl} 
+                                alt={`Product ${idx}`} 
+                                style={{ 
+                                  width: "100%", 
+                                  height: "100%", 
+                                  objectFit: imgConfig.fit || "cover", 
+                                  objectPosition: `${imgConfig.x ?? 50}% ${imgConfig.y ?? 50}%`,
+                                  transform: imgConfig.zoom && imgConfig.zoom !== 1 ? `scale(${imgConfig.zoom})` : 'none'
+                                }} 
+                              />
+                              <button 
+                                type="button"
+                                title="Delete Image"
+                                onClick={() => {
+                                  if (window.confirm("Remove this image?")) {
+                                    const newImages = currentImages.filter((_, i) => i !== idx);
+                                    setEditingProduct({ 
+                                      ...editingProduct, 
+                                      images: newImages, 
+                                      image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                                    });
+                                  }
+                                }}
+                                style={{ 
+                                  position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
+                                  color: "white", border: "none", borderRadius: "50%", width: "20px", height: "20px", 
+                                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
+                                  fontSize: "0.7rem", zIndex: 10
+                                }}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+
+                            {/* Reordering & Align Toolbar */}
+                            <div style={{ display: "flex", gap: "2px", background: "#0f172a", padding: "2px" }}>
+                              <button 
+                                type="button"
+                                title="Move Left"
+                                disabled={idx === 0}
+                                onClick={() => {
+                                  if (idx === 0) return;
+                                  const arr = [...currentImages];
+                                  const temp = arr[idx];
+                                  arr[idx] = arr[idx - 1];
+                                  arr[idx - 1] = temp;
+                                  setEditingProduct({ ...editingProduct, images: arr, image: arr[0] });
+                                }}
+                                style={{ flex: 1, background: idx === 0 ? "#334155" : "#1e293b", color: "#fff", border: "none", borderRadius: "3px", padding: "3px 0", fontSize: "0.65rem", cursor: idx === 0 ? "not-allowed" : "pointer" }}
+                              >
+                                ◀
+                              </button>
+
+                              <button 
+                                type="button"
+                                title="Adjust Alignment & Fit"
+                                onClick={() => {
+                                  setAligningImage({
+                                    url: imgUrl,
+                                    index: idx,
+                                    fit: imgConfig.fit || 'cover',
+                                    x: imgConfig.x !== undefined ? imgConfig.x : 50,
+                                    y: imgConfig.y !== undefined ? imgConfig.y : 50,
+                                    zoom: imgConfig.zoom !== undefined ? imgConfig.zoom : 1
                                   });
-                                }
-                              }}
-                              style={{ 
-                                position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
-                                color: "white", border: "none", borderRadius: "50%", width: "20px", height: "20px", 
-                                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", 
-                                fontSize: "0.7rem", zIndex: 10
-                              }}
-                            >
-                              <i className="fa-solid fa-xmark"></i>
-                            </button>
-                            <button 
-                              type="button"
-                              title="Adjust Alignment & Fit"
-                              onClick={() => {
-                                setAligningImage({
-                                  url: imgUrl,
-                                  index: idx,
-                                  fit: imgConfig.fit || 'cover',
-                                  x: imgConfig.x !== undefined ? imgConfig.x : 50,
-                                  y: imgConfig.y !== undefined ? imgConfig.y : 50,
-                                  zoom: imgConfig.zoom !== undefined ? imgConfig.zoom : 1
-                                });
-                              }}
-                              style={{ 
-                                position: "absolute", bottom: "4px", left: "4px", right: "4px", 
-                                background: "rgba(15, 23, 42, 0.85)", color: "#fff", border: "none", 
-                                borderRadius: "4px", padding: "3px 4px", fontSize: "0.65rem", 
-                                fontWeight: "600", cursor: "pointer", display: "flex", 
-                                alignItems: "center", justifyContent: "center", gap: "4px", zIndex: 10
-                              }}
-                            >
-                              <i className="fa-solid fa-sliders"></i> Align & Fit
-                            </button>
+                                }}
+                                style={{ flex: 1.5, background: "#2563eb", color: "#fff", border: "none", borderRadius: "3px", padding: "3px 0", fontSize: "0.62rem", fontWeight: "600", cursor: "pointer" }}
+                              >
+                                Align
+                              </button>
+
+                              <button 
+                                type="button"
+                                title="Move Right"
+                                disabled={idx === currentImages.length - 1}
+                                onClick={() => {
+                                  if (idx >= currentImages.length - 1) return;
+                                  const arr = [...currentImages];
+                                  const temp = arr[idx];
+                                  arr[idx] = arr[idx + 1];
+                                  arr[idx + 1] = temp;
+                                  setEditingProduct({ ...editingProduct, images: arr, image: arr[0] });
+                                }}
+                                style={{ flex: 1, background: idx === currentImages.length - 1 ? "#334155" : "#1e293b", color: "#fff", border: "none", borderRadius: "3px", padding: "3px 0", fontSize: "0.65rem", cursor: idx === currentImages.length - 1 ? "not-allowed" : "pointer" }}
+                              >
+                                ▶
+                              </button>
+                            </div>
                           </div>
                         );
                       });

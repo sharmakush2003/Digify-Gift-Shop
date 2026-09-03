@@ -705,25 +705,29 @@ function CatalogContent() {
                   </div>
                 </div>
 
-                <div className="highlight-badge-card">
-                  <div className={`badge-icon-box ${selectedProduct.fragile ? 'fragile' : 'standard'}`}>
-                    <i className={`fa-solid ${selectedProduct.fragile ? 'fa-shield-halved' : 'fa-box-archive'}`}></i>
+                {selectedProduct.fragile === true && (
+                  <div className="highlight-badge-card">
+                    <div className="badge-icon-box fragile">
+                      <i className="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div className="badge-text-box">
+                      <span className="badge-title">HANDLING</span>
+                      <span className="badge-val">Fragile Handling ⚠️</span>
+                    </div>
                   </div>
-                  <div className="badge-text-box">
-                    <span className="badge-title">HANDLING</span>
-                    <span className="badge-val">{selectedProduct.fragile ? "Fragile Item" : "Standard"}</span>
-                  </div>
-                </div>
+                )}
 
-                <div className="highlight-badge-card">
-                  <div className={`badge-icon-box ${selectedProduct.microwave ? 'microwave-safe' : 'microwave-warn'}`}>
-                    <i className={`fa-solid ${selectedProduct.microwave ? 'fa-fire-burner' : 'fa-triangle-exclamation'}`}></i>
+                {selectedProduct.microwave === true && (
+                  <div className="highlight-badge-card">
+                    <div className="badge-icon-box microwave-safe">
+                      <i className="fa-solid fa-fire-burner"></i>
+                    </div>
+                    <div className="badge-text-box">
+                      <span className="badge-title">MICROWAVE</span>
+                      <span className="badge-val">Microwave Safe ♨️</span>
+                    </div>
                   </div>
-                  <div className="badge-text-box">
-                    <span className="badge-title">MICROWAVE</span>
-                    <span className="badge-val">{selectedProduct.microwave ? "Safe" : "Not Safe"}</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Embedded YouTube & Instagram Video Showcase */}
