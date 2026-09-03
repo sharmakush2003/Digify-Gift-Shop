@@ -6,14 +6,30 @@ export const getProducts = () => {
   if (typeof window === 'undefined') return [...parsedProducts];
   let data = localStorage.getItem('orient_products');
   let version = localStorage.getItem('orient_products_version');
+  let productsList = [];
   
   if (!data || version !== CACHE_VERSION) {
-    const combined = [...parsedProducts];
-    localStorage.setItem('orient_products', JSON.stringify(combined));
+    productsList = [...parsedProducts];
+    localStorage.setItem('orient_products', JSON.stringify(productsList));
     localStorage.setItem('orient_products_version', CACHE_VERSION);
-    return combined;
+  } else {
+    try {
+      productsList = JSON.parse(data);
+    } catch (e) {
+      productsList = [...parsedProducts];
+    }
   }
-  return JSON.parse(data);
+
+  // Merge warranty local storage map
+  try {
+    const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
+    return productsList.map(p => ({
+      ...p,
+      warranty: p.warranty || warrantyMap[p.id] || warrantyMap[String(p.id)] || "No Warranty"
+    }));
+  } catch (e) {
+    return productsList;
+  }
 };
 
 export const saveProducts = (products) => {

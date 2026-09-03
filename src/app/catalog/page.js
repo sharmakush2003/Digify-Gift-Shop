@@ -705,7 +705,7 @@ function CatalogContent() {
                   </div>
                 </div>
 
-                {selectedProduct.fragile === true && (
+                {(selectedProduct.fragile === true || selectedProduct.fragile === "true" || selectedProduct.fragile === "fragile") && (
                   <div className="highlight-badge-card">
                     <div className="badge-icon-box fragile">
                       <i className="fa-solid fa-shield-halved"></i>
@@ -717,7 +717,7 @@ function CatalogContent() {
                   </div>
                 )}
 
-                {selectedProduct.microwave === true && (
+                {(selectedProduct.microwave === true || selectedProduct.microwave === "true" || selectedProduct.microwave === "safe") && (
                   <div className="highlight-badge-card">
                     <div className="badge-icon-box microwave-safe">
                       <i className="fa-solid fa-fire-burner"></i>
@@ -725,6 +725,18 @@ function CatalogContent() {
                     <div className="badge-text-box">
                       <span className="badge-title">MICROWAVE</span>
                       <span className="badge-val">Microwave Safe ♨️</span>
+                    </div>
+                  </div>
+                )}
+
+                {selectedProduct.warranty && selectedProduct.warranty !== "No Warranty" && (
+                  <div className="highlight-badge-card">
+                    <div className="badge-icon-box warranty" style={{ backgroundColor: "#ecfdf5", color: "#059669" }}>
+                      <i className="fa-solid fa-award"></i>
+                    </div>
+                    <div className="badge-text-box">
+                      <span className="badge-title">WARRANTY</span>
+                      <span className="badge-val">{selectedProduct.warranty}</span>
                     </div>
                   </div>
                 )}

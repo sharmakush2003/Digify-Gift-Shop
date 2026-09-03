@@ -47,8 +47,16 @@ export function AppProvider({ children }) {
         if (data && data.length > 0) {
           const merged = data.map(p => {
             const media = getProductMediaUrls(p);
+            let warrantyVal = p.warranty;
+            if (!warrantyVal && typeof window !== 'undefined') {
+              try {
+                const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
+                warrantyVal = warrantyMap[p.id] || warrantyMap[String(p.id)];
+              } catch (err) {}
+            }
             return {
               ...p,
+              warranty: warrantyVal || "No Warranty",
               youtube_url: p.youtube_url || media.youtube_url || '',
               instagram_url: p.instagram_url || media.instagram_url || ''
             };

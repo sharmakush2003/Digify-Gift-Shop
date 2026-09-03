@@ -148,8 +148,16 @@ export default function AdminPage() {
       if (error) throw error;
       let productsData = (data || []).map(p => {
         const media = getProductMediaUrls(p);
+        let warrantyVal = p.warranty;
+        if (!warrantyVal && typeof window !== 'undefined') {
+          try {
+            const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
+            warrantyVal = warrantyMap[p.id] || warrantyMap[String(p.id)];
+          } catch (err) {}
+        }
         return {
           ...p,
+          warranty: warrantyVal || "No Warranty",
           youtube_url: p.youtube_url || media.youtube_url || '',
           instagram_url: p.instagram_url || media.instagram_url || ''
         };
@@ -701,13 +709,20 @@ export default function AdminPage() {
     // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
     delete updated.stockStatus;
 
-    // Persist local backup of image_settings & media URLs
+    // Persist local backup of warranty, image_settings & media URLs
     if (typeof window !== 'undefined' && updated.id) {
       try {
         if (updated.image_settings) {
           const localMap = JSON.parse(localStorage.getItem('orient_image_settings') || '{}');
           localMap[updated.id] = updated.image_settings;
           localStorage.setItem('orient_image_settings', JSON.stringify(localMap));
+        }
+
+        if (updated.warranty) {
+          const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
+          warrantyMap[updated.id] = updated.warranty;
+          warrantyMap[String(updated.id)] = updated.warranty;
+          localStorage.setItem('orient_product_warranties', JSON.stringify(warrantyMap));
         }
 
         const mediaMap = JSON.parse(localStorage.getItem('orient_product_media_urls') || '{}');
@@ -724,11 +739,14 @@ export default function AdminPage() {
     const updateProductInSupabase = async () => {
       try {
         let { error } = await supabase.from('products').upsert(updated);
-        if (error && (error.code === 'PGRST204' || (error.message && (error.message.includes('image_settings') || error.message.includes('youtube_url') || error.message.includes('instagram_url'))))) {
+        if (error) {
+          console.warn("Supabase schema mismatch (custom column missing). Retrying with base columns:", error);
           const fallback = { ...updated };
           delete fallback.image_settings;
           delete fallback.youtube_url;
           delete fallback.instagram_url;
+          delete fallback.warranty;
+          delete fallback.reviews;
           const retryRes = await supabase.from('products').upsert(fallback);
           error = retryRes.error;
         }
@@ -2546,7 +2564,7 @@ export default function AdminPage() {
                   )}
                 </div>
                 
-                <div className="form-group full-width" style={{ flexDirection: "row", gap: "25px", margin: "5px 0" }}>
+                <div className="form-group full-width" style={{ display: "flex", flexWrap: "wrap", gap: "25px", alignItems: "center", margin: "5px 0" }}>
                   <label className="filter-checkbox-label">
                     <input 
                       type="checkbox" 
@@ -2563,7 +2581,25 @@ export default function AdminPage() {
                     />
                     <span>Microwave Safe</span>
                   </label>
+
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: "700", color: "#334155" }}>Warranty:</span>
+                    <select 
+                      className="sort-select"
+                      style={{ padding: "6px 12px", borderRadius: "6px" }}
+                      value={editingProduct.warranty || "No Warranty"}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, warranty: e.target.value })}
+                    >
+                      <option value="No Warranty">No Warranty</option>
+                      <option value="6 Months Brand Warranty">6 Months Brand Warranty</option>
+                      <option value="1 Year Brand Warranty">1 Year Brand Warranty</option>
+                      <option value="2 Years Replacement Warranty">2 Years Replacement Warranty</option>
+                      <option value="5 Years Orient Guarantee">5 Years Orient Guarantee</option>
+                      <option value="Lifetime Craftsmanship Warranty">Lifetime Craftsmanship Warranty</option>
+                    </select>
+                  </div>
                 </div>
+
                 {/* Product Social Reel & Video Links Box */}
                 <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -2608,33 +2644,33 @@ export default function AdminPage() {
                     <i className="fa-solid fa-star" style={{ color: "#f59e0b" }}></i> Customer Reviews Management
                   </h4>
                   
-                  {/* Manual Review additions */}
-                  <div style={{ padding: "10px", backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1rem" }}>
-                    <span className="modal-meta-label" style={{ fontSize: "0.75rem" }}>Inject Customer Review</span>
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                  {/* Manual Review Injection */}
+                  <div style={{ padding: "12px", backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "1rem" }}>
+                    <span className="modal-meta-label" style={{ fontSize: "0.75rem", marginBottom: "8px" }}>Inject Custom Review</span>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: "10px", marginBottom: "8px" }}>
                       <input 
                         type="text" 
                         className="form-input" 
-                        placeholder="Author Name"
+                        placeholder="Reviewer Name (e.g. Ananya Sharma)"
                         value={newReviewAuthor}
                         onChange={(e) => setNewReviewAuthor(e.target.value)}
-                        style={{ flex: 1 }}
+                        style={{ width: "100%" }}
                       />
                       <select 
                         className="sort-select" 
                         value={newReviewRating} 
                         onChange={(e) => setNewReviewRating(parseInt(e.target.value))}
-                        style={{ width: "80px" }}
+                        style={{ width: "100%", padding: "8px" }}
                       >
-                        <option value="5">5★</option>
-                        <option value="4">4★</option>
-                        <option value="3">3★</option>
+                        <option value="5">5 ★★★★★</option>
+                        <option value="4">4 ★★★★</option>
+                        <option value="3">3 ★★★</option>
                       </select>
                     </div>
                     <textarea 
                       rows="2" 
                       className="form-input" 
-                      placeholder="Review details..."
+                      placeholder="Write customer review comment..."
                       style={{ resize: "vertical", width: "100%" }}
                       value={newReviewText}
                       onChange={(e) => setNewReviewText(e.target.value)}
@@ -2645,25 +2681,30 @@ export default function AdminPage() {
                       style={{ marginTop: "8px", padding: "6px" }}
                       onClick={handleAddReviewManually}
                     >
-                      + Insert Review
+                      + Insert Customer Review
                     </button>
                   </div>
 
-                  {/* Reviews List */}
+                  {/* Attached Reviews List with Delete */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {(!editingProduct.reviews || editingProduct.reviews.length === 0) ? (
                       <p style={{ fontStyle: "italic", fontSize: "0.8rem", color: "#64748b", margin: 0 }}>No customer reviews attached.</p>
                     ) : (
-                      editingProduct.reviews.map(rev => (
-                        <div key={rev.id} style={{ fontSize: "0.8rem", padding: "8px 12px", background: "#fff", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "600", marginBottom: "4px", color: "#1e293b" }}>
-                            <span>{rev.reviewerName} ({rev.rating}{'★'})</span>
+                      editingProduct.reviews.map((rev, rIdx) => (
+                        <div key={rev.id || rIdx} style={{ fontSize: "0.83rem", padding: "10px 12px", background: "#fff", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "600", marginBottom: "4px", color: "#1e293b" }}>
+                            <span>{rev.reviewerName} ({rev.rating}★)</span>
                             <button 
                               type="button"
-                              onClick={() => handleDeleteReview(rev.id)}
-                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontWeight: "bold" }}
+                              onClick={() => {
+                                if (window.confirm(`Delete review by ${rev.reviewerName}?`)) {
+                                  const updatedRevs = editingProduct.reviews.filter((_, i) => i !== rIdx);
+                                  setEditingProduct({ ...editingProduct, reviews: updatedRevs });
+                                }
+                              }}
+                              style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#ef4444", borderRadius: "4px", padding: "2px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "700" }}
                             >
-                              Delete
+                              <i className="fa-solid fa-trash-can"></i> Delete
                             </button>
                           </div>
                           <p style={{ color: "#475569", margin: 0 }}>{rev.comment}</p>
