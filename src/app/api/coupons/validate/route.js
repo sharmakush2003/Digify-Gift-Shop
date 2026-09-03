@@ -8,22 +8,33 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request) {
   try {
-    const { code, cartValue, cartItems = [], email = "" } = await request.json();
+    const { code, cartValue, cartItems = [], email = "", activeCoupons = [] } = await request.json();
 
     if (!code) {
       return NextResponse.json({ success: false, message: 'Coupon code is required' }, { status: 400 });
     }
 
     // Fetch the coupon from the database
-    const { data: coupon, error } = await supabase
+    const { data: dbCoupon, error } = await supabase
       .from('coupons')
       .select('*')
       .eq('code', code.toUpperCase().trim())
-      .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (error || !coupon) {
-      return NextResponse.json({ success: false, message: 'Invalid or inactive coupon code' }, { status: 404 });
+    // Fallback dictionary for standard coupons if not found in DB
+    let coupon = dbCoupon;
+    if (!coupon) {
+      const demoCoupons = {
+        'FLAT100': { id: 'flat100', code: 'FLAT100', discount_type: 'FIXED', discount_value: 100, min_cart_value: 0, is_active: true, is_additive: false },
+        'HOLI10': { id: 'holi10', code: 'HOLI10', discount_type: 'PERCENTAGE', discount_value: 10, min_cart_value: 0, is_active: true, is_additive: false },
+        'OFF20': { id: 'off20', code: 'OFF20', discount_type: 'PERCENTAGE', discount_value: 20, min_cart_value: 0, is_active: true, is_additive: true },
+        'FESTIVE10': { id: 'festive10', code: 'FESTIVE10', discount_type: 'FIXED', discount_value: 100, min_cart_value: 0, is_active: true, is_additive: true }
+      };
+      coupon = demoCoupons[code.toUpperCase().trim()];
+    }
+
+    if (!coupon) {
+      return NextResponse.json({ success: false, message: 'Invalid coupon code' }, { status: 404 });
     }
 
     // Check validity dates
@@ -38,6 +49,27 @@ export async function POST(request) {
     // Check minimum cart value
     if (coupon.min_cart_value > 0 && cartValue < coupon.min_cart_value) {
       return NextResponse.json({ success: false, message: `Minimum cart value of ₹${coupon.min_cart_value} required` }, { status: 400 });
+    }
+
+    // Determine Stacking Category (Additive vs Exclusive)
+    const isAdditive = coupon.is_additive === true || (coupon.discount_type && coupon.discount_type.includes('ADDITIVE'));
+    const rawDiscountType = (coupon.discount_type || 'PERCENTAGE').replace('_ADDITIVE', '');
+
+    // 1. Check if this exact coupon is already applied
+    if (activeCoupons.some(c => c.code.toUpperCase() === coupon.code.toUpperCase())) {
+      return NextResponse.json({ success: false, message: 'This coupon code is already applied.' }, { status: 400 });
+    }
+
+    // 2. Check Stacking Rules:
+    // Non-additive (exclusive) coupons cannot combine with other non-additive coupons
+    if (!isAdditive && !coupon.is_gift_voucher) {
+      const hasExistingExclusive = activeCoupons.some(c => !c.isAdditive && !c.isGiftVoucher);
+      if (hasExistingExclusive) {
+        return NextResponse.json({ 
+          success: false, 
+          message: 'An exclusive single-use coupon is already applied. Non-additive coupons cannot be stacked.' 
+        }, { status: 400 });
+      }
     }
 
     // Check SINGLE_USE per Customer Email limit
@@ -73,12 +105,12 @@ export async function POST(request) {
 
     // Calculate discount
     let discountAmount = 0;
-    if (coupon.discount_type === 'PERCENTAGE') {
+    if (rawDiscountType === 'PERCENTAGE') {
       discountAmount = (eligibleSubtotal * coupon.discount_value) / 100;
       if (coupon.max_discount && discountAmount > coupon.max_discount) {
         discountAmount = coupon.max_discount;
       }
-    } else if (coupon.discount_type === 'FIXED') {
+    } else if (rawDiscountType === 'FIXED') {
       discountAmount = coupon.discount_value;
     }
 
@@ -89,13 +121,14 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: `${coupon.is_gift_voucher ? 'Gift Voucher' : 'Coupon'} applied successfully!`,
+      message: `${isAdditive ? '➕ Additive Coupon' : 'Coupon'} applied successfully!`,
       discountAmount: Math.round(discountAmount * 100) / 100,
       coupon: {
         id: coupon.id,
         code: coupon.code,
-        type: coupon.discount_type,
+        type: rawDiscountType,
         value: coupon.discount_value,
+        isAdditive: isAdditive,
         isGiftVoucher: coupon.is_gift_voucher || false,
         category: coupon.coupon_category || 'ALL',
         usageType: coupon.usage_type || 'MULTI_USE'

@@ -67,16 +67,27 @@ export default function DeliveryPortal() {
       if (!success) throw new Error("Failed to fetch orders");
       const fetchedData = orders || data;
 
-      let fetchedOrders = fetchedData ? fetchedData.map(dbOrder => ({
-        id: dbOrder.order_number || dbOrder.id,
-        date: dbOrder.created_at,
-        customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
-        shippingAddress: dbOrder.shipping_address?.raw_text || 'N/A',
-        total: dbOrder.final_total || 0,
-        delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
-        paymentStatus: dbOrder.payment_status === 'SUCCESS' ? 'Paid' : 'Pending',
-        status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
-      })) : [];
+      let fetchedOrders = fetchedData ? fetchedData.map(dbOrder => {
+        const isPickup = dbOrder.shipping_address?.delivery_method === 'pickup' || 
+                         (dbOrder.shipping_address?.raw_text && dbOrder.shipping_address.raw_text.toLowerCase().includes('pickup')) ||
+                         dbOrder.delivery_method === 'pickup';
+        return {
+          id: dbOrder.order_number || dbOrder.id,
+          date: dbOrder.created_at,
+          customerName: dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer',
+          customerPhone: dbOrder.guest_phone || dbOrder.shipping_address?.phone || 'N/A',
+          shippingAddress: dbOrder.shipping_address?.raw_text || (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
+          deliveryMethod: isPickup ? 'pickup' : 'delivery',
+          total: dbOrder.final_total || dbOrder.total_mrp || 0,
+          subtotal: dbOrder.total_mrp || 0,
+          shippingFee: dbOrder.shipping_charge || 0,
+          discount: dbOrder.discount_amount || 0,
+          items: dbOrder.order_items ? dbOrder.order_items.map(i => ({ name: i.products?.name || i.product_name || `Product #${i.product_id}`, quantity: i.quantity, price: i.price_at_time })) : (dbOrder.items || []),
+          delivery_otp: dbOrder.shipping_address?.delivery_otp || null,
+          paymentStatus: dbOrder.payment_status === 'SUCCESS' ? 'Paid' : 'Pending',
+          status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
+        };
+      }) : [];
       fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
 
       // Filter assigned deliveries to monitor for new dispatches
@@ -304,35 +315,54 @@ export default function DeliveryPortal() {
             });
 
             return (
-              <div key={order.id} className="delivery-card">
-                <div className="card-top">
+              <div key={order.id} className="delivery-card" style={{ borderLeft: order.deliveryMethod === 'pickup' ? '4px solid #2e7d32' : '4px solid #0284c7' }}>
+                <div 
+                  className="card-top" 
+                  onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
+                  style={{ cursor: "pointer" }}
+                >
                   <div>
                     <span className="order-id-label">ID: #{order.id}</span>
                     <span className="order-date-label">{orderDateStr}</span>
                   </div>
-                  <span className={`status-badge ${order.status.toLowerCase()}`}>
-                    {order.status}
-                  </span>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    {order.deliveryMethod === 'pickup' ? (
+                      <span style={{ backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7", padding: "3px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "700" }}>
+                        <i className="fa-solid fa-store" style={{ marginRight: "4px" }}></i> Self Pickup
+                      </span>
+                    ) : (
+                      <span style={{ backgroundColor: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", padding: "3px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "700" }}>
+                        <i className="fa-solid fa-truck" style={{ marginRight: "4px" }}></i> Home Delivery
+                      </span>
+                    )}
+                    <span className={`status-badge ${order.status.toLowerCase()}`}>
+                      {order.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="customer-detail-row">
                   <span className="customer-name">{order.customerName}</span>
-                  <a href={`tel:${order.customerPhone}`} className="call-btn" title="Call Customer">
-                    <i className="fa-solid fa-phone"></i>
-                  </a>
+                  {order.customerPhone && order.customerPhone !== 'N/A' && (
+                    <a href={`tel:${order.customerPhone}`} className="call-btn" title="Call Customer">
+                      <i className="fa-solid fa-phone"></i>
+                    </a>
+                  )}
                 </div>
 
                 <div className="address-box">
-                  <strong>Delivery Address:</strong>
+                  <strong>{order.deliveryMethod === 'pickup' ? 'Store Pickup Location:' : 'Delivery Address:'}</strong>
                   <p style={{ margin: "5px 0 0 0" }}>{order.shippingAddress || order.address}</p>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.shippingAddress || order.address)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="map-btn"
-                  >
-                    <i className="fa-solid fa-location-arrow"></i> Navigate using GPS Maps
-                  </a>
+                  {order.deliveryMethod !== 'pickup' && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.shippingAddress || order.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="map-btn"
+                    >
+                      <i className="fa-solid fa-location-arrow"></i> Navigate using GPS Maps
+                    </a>
+                  )}
                 </div>
 
                 <div className={`cod-banner ${isCOD ? "cod" : "prepaid"}`}>
@@ -346,19 +376,47 @@ export default function DeliveryPortal() {
                   onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
                 >
                   <i className={`fa-solid ${expandedOrder === order.id ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
-                  {expandedOrder === order.id ? "Hide items details" : "Show items list"}
+                  {expandedOrder === order.id ? "Hide order details & items" : "Click to view items & bill summary"}
                 </div>
 
                 {expandedOrder === order.id && (
-                  <div className="items-list">
-                    {order.items && order.items.map((item, idx) => (
-                      <div key={idx} className="item-row">
-                        <span className="item-name">
-                          <span className="item-qty">{item.quantity}x</span> {item.name}
-                        </span>
-                        <span style={{ color: "#718096" }}>₹{item.price}</span>
+                  <div className="items-list" style={{ marginTop: "10px", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <h5 style={{ margin: "0 0 8px 0", fontSize: "0.85rem", textTransform: "uppercase", color: "#64748b", letterSpacing: "0.5px" }}>Ordered Items ({order.items ? order.items.length : 0})</h5>
+                    {order.items && order.items.length > 0 ? (
+                      order.items.map((item, idx) => (
+                        <div key={idx} className="item-row" style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #e2e8f0", fontSize: "0.85rem" }}>
+                          <span className="item-name" style={{ fontWeight: "600" }}>
+                            <span className="item-qty" style={{ color: "var(--primary)", marginRight: "6px" }}>{item.quantity}x</span> {item.name}
+                          </span>
+                          <span style={{ color: "#334155", fontWeight: "600" }}>₹{(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: "0.8rem", color: "#94a3b8", margin: 0 }}>Itemized list recorded in ERP database</p>
+                    )}
+
+                    <div style={{ marginTop: "12px", paddingTop: "8px", borderTop: "1.5px solid #cbd5e1", fontSize: "0.82rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "#64748b" }}>Subtotal:</span>
+                        <span style={{ fontWeight: "600" }}>₹{order.subtotal ? order.subtotal.toFixed(2) : order.total.toFixed(2)}</span>
                       </div>
-                    ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "#64748b" }}>Delivery Charges:</span>
+                        <span style={{ fontWeight: "600", color: order.deliveryMethod === 'pickup' ? '#2e7d32' : '#334155' }}>
+                          {order.deliveryMethod === 'pickup' ? '₹0.00 (Self Pickup)' : `₹${(order.shippingFee || 0).toFixed(2)}`}
+                        </span>
+                      </div>
+                      {order.discount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", color: "#16a34a" }}>
+                          <span>Promo Discount:</span>
+                          <span>-₹{order.discount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", paddingTop: "6px", borderTop: "1px solid #cbd5e1", fontWeight: "700", fontSize: "0.95rem", color: "#0f172a" }}>
+                        <span>Final Bill:</span>
+                        <span style={{ color: "var(--primary)" }}>₹{order.total.toFixed(2)}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 

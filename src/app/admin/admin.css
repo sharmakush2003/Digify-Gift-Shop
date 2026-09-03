@@ -119,9 +119,19 @@
 .erp-main-content {
   flex: 1;
   margin-left: 260px;
-  padding: 30px;
+  padding: 20px 16px;
   background-color: var(--bg-main);
   min-height: 100vh;
+  width: calc(100% - 260px);
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .erp-main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding: 16px 12px !important;
+  }
 }
 
 
@@ -386,10 +396,13 @@
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border: 1px solid var(--glass-border);
-  border-radius: 24px;
-  padding: 2.5rem;
+  border-radius: 20px;
+  padding: 1.25rem 1rem;
   min-height: 400px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .erp-tab-content {
@@ -407,9 +420,9 @@
 }
 
 .panel-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--glass-border);
-  padding-bottom: 1.5rem;
+  padding-bottom: 1rem;
 }
 
 .panel-header h3 {
@@ -423,30 +436,34 @@
 /* Database Table Configurations - Enterprise Grid Layout */
 .table-responsive {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 12px;
   border: 1px solid #cbd5e1;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
   background: #ffffff;
+  display: block;
 }
 
 .erp-table {
   width: 100%;
+  min-width: 860px;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   background: #ffffff;
 }
 
 .erp-table th {
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
-  padding: 14px 16px;
+  padding: 10px 12px;
   font-weight: 700;
   color: #1e293b !important;
   text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
@@ -461,7 +478,7 @@
 
 .erp-table td {
   border: 1px solid #cbd5e1;
-  padding: 14px 16px;
+  padding: 10px 12px;
   color: #1e293b;
   vertical-align: middle;
 }

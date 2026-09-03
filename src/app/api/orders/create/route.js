@@ -61,9 +61,11 @@ export async function POST(request) {
       razorpayOrder = { id: 'order_' + Math.random().toString(36).substr(2, 9) };
     }
 
+    const deliveryMethod = body.deliveryMethod || customerDetails.deliveryMethod || customerDetails.shippingAddress?.delivery_method || 'delivery';
+
     const shippingAddressObj = typeof customerDetails.shippingAddress === 'object' ? 
-      { name: customerDetails.name, phone: customerDetails.phone, ...customerDetails.shippingAddress } : 
-      { name: customerDetails.name, phone: customerDetails.phone, raw_text: customerDetails.shippingAddress };
+      { name: customerDetails.name, phone: customerDetails.phone, delivery_method: deliveryMethod, ...customerDetails.shippingAddress } : 
+      { name: customerDetails.name, phone: customerDetails.phone, delivery_method: deliveryMethod, raw_text: customerDetails.shippingAddress };
 
     // 4. Save to Database as PAYMENT_PENDING
     const dbOrder = {

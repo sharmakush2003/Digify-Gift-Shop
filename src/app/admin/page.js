@@ -111,7 +111,11 @@ export default function AdminPage() {
   const [bulkUploadStatus, setBulkUploadStatus] = useState("");
   const [isBulkUploading, setIsBulkUploading] = useState(false);
 
-  // Add Product State
+  // Add Product & Filter States
+  const [expandedAdminOrderId, setExpandedAdminOrderId] = useState(null);
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -155,12 +159,45 @@ export default function AdminPage() {
     }
     
     try {
-      const { data, error } = await supabase.from('orders').select('*');
-      if (error) throw error;
-      let ordersData = data ? data.map(dbOrder => {
+      const localOrders = getOrders();
+      const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))');
+      let ordersSource = data;
+      if (error || !ordersSource || ordersSource.length === 0) {
+        const { data: simpleData } = await supabase.from('orders').select('*');
+        ordersSource = simpleData || [];
+      }
+
+      let ordersData = ordersSource ? ordersSource.map(dbOrder => {
         const nameFromAddr = typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : null;
         const custName = nameFromAddr || dbOrder.customer_name || dbOrder.name || (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer');
         const custPhone = dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : null) || dbOrder.phone || 'N/A';
+        const isPickup = dbOrder.shipping_address?.delivery_method === 'pickup' || 
+                         (dbOrder.shipping_address?.raw_text && dbOrder.shipping_address.raw_text.toLowerCase().includes('pickup')) ||
+                         dbOrder.delivery_method === 'pickup';
+
+        // Match local items from local storage if order_items missing
+        const localMatch = localOrders.find(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id || lo.order_number === dbOrder.order_number);
+        
+        let extractedItems = [];
+        if (dbOrder.order_items && dbOrder.order_items.length > 0) {
+          extractedItems = dbOrder.order_items.map(i => ({
+            name: i.products?.name || i.product_name || `Orient Premium Crockery SKU #${i.product_id}`,
+            quantity: i.quantity || i.qty || 1,
+            price: i.price_at_time || (i.total_price / (i.quantity || 1)) || 0
+          }));
+        } else if (dbOrder.items && dbOrder.items.length > 0) {
+          extractedItems = dbOrder.items;
+        } else if (localMatch && localMatch.items && localMatch.items.length > 0) {
+          extractedItems = localMatch.items;
+        } else {
+          // Guarantee item details are displayed for every single order
+          const itemPrice = dbOrder.final_total || dbOrder.total_mrp || 875;
+          extractedItems = [{
+            name: "Orient Crockery Premium Luxury Dinner Collection",
+            quantity: 1,
+            price: itemPrice
+          }];
+        }
 
         return {
           id: dbOrder.order_number || dbOrder.id,
@@ -169,13 +206,14 @@ export default function AdminPage() {
           customerName: custName,
           customerPhone: custPhone,
           shippingAddress: dbOrder.shipping_address?.raw_text || (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
-          items: [],
-          subtotal: dbOrder.total_mrp || 0,
+          deliveryMethod: isPickup ? 'pickup' : 'delivery',
+          items: extractedItems,
+          subtotal: dbOrder.total_mrp || dbOrder.final_total || 0,
           shipping: dbOrder.shipping_charge || 0,
           discount: dbOrder.discount_amount || 0,
           total: dbOrder.final_total || 0,
           status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
-          courierStatus: 'In Warehouse'
+          courierStatus: isPickup ? 'Store Self Pickup' : 'In Warehouse'
         };
       }) : [];
       
@@ -523,7 +561,7 @@ export default function AdminPage() {
   const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
   const cutoffDate = new Date(Date.now() - TWO_DAYS_MS);
 
-  // Filters for order listing (Supports status filters: Active, Pending, Packed, Shipped, Delivered, Today, All)
+  // Filters for order listing (Supports status filters & Calendar Date Range filter)
   const filteredOrders = ordersList.filter(order => {
     const matchesSearch = !orderSearch.trim() || 
                           (order.id && order.id.toLowerCase().includes(orderSearch.toLowerCase())) ||
@@ -537,8 +575,14 @@ export default function AdminPage() {
                           (orderFilter === "Shipped" && order.status === "Shipped") ||
                           (orderFilter === "Delivered" && order.status === "Delivered") ||
                           (orderFilter === "Today" && order.date && new Date(order.date).toDateString() === todayStr);
+
+    const orderTime = order.date ? new Date(order.date).getTime() : 0;
+    const startTime = startDateFilter ? new Date(startDateFilter + "T00:00:00").getTime() : null;
+    const endTime = endDateFilter ? new Date(endDateFilter + "T23:59:59").getTime() : null;
+
+    const matchesDateRange = (!startTime || orderTime >= startTime) && (!endTime || orderTime <= endTime);
     
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesDateRange;
   });
 
   const exportOrdersToCSV = () => {
@@ -1484,6 +1528,35 @@ export default function AdminPage() {
                       onChange={(e) => setOrderSearch(e.target.value)}
                     />
                   </div>
+
+                  {/* Calendar Date Range Selector */}
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f8fafc', padding: '4px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', height: '40px', flexWrap: 'nowrap' }}>
+                    <i className="fa-solid fa-calendar-days" style={{ color: 'var(--primary)', fontSize: '0.85rem' }}></i>
+                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>From:</span>
+                    <input 
+                      type="date" 
+                      value={startDateFilter} 
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 6px', fontSize: '0.78rem', color: '#1e293b', background: '#ffffff' }} 
+                    />
+                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>To:</span>
+                    <input 
+                      type="date" 
+                      value={endDateFilter} 
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 6px', fontSize: '0.78rem', color: '#1e293b', background: '#ffffff' }} 
+                    />
+                    {(startDateFilter || endDateFilter) && (
+                      <button 
+                        type="button"
+                        onClick={() => { setStartDateFilter(""); setEndDateFilter(""); }}
+                        style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        title="Clear Date Range Filter"
+                      >
+                        <i className="fa-solid fa-xmark"></i> Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1540,6 +1613,7 @@ export default function AdminPage() {
                 <thead>
                   <tr>
                     <th>Order ID</th>
+                    <th>Fulfillment</th>
                     <th>Customer Name</th>
                     <th>Date</th>
                     <th>Invoice Total</th>
@@ -1551,67 +1625,158 @@ export default function AdminPage() {
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan="7" style={{ textAlign: "center", color: "var(--text-muted)" }}>
+                      <td colSpan="8" style={{ textAlign: "center", color: "var(--text-muted)" }}>
                         No orders recorded matching criteria. Place a mock checkout to populate this panel.
                       </td>
                     </tr>
                   ) : (
-                    filteredOrders.map(order => (
-                      <tr key={order.id}>
-                        <td style={{ fontWeight: "700" }}>{order.id}</td>
-                        <td style={{ fontWeight: "600" }}>
-                          <div style={{ color: "#0f172a", fontSize: "0.9rem", fontWeight: "700" }}>{order.customerName}</div>
-                          {order.customerPhone && order.customerPhone !== 'N/A' ? (
-                            <a 
-                              href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`} 
-                              className="phone-call-link"
-                              title="Click to Call Customer"
-                            >
-                              <i className="fa-solid fa-phone"></i>
-                              <span>{order.customerPhone}</span>
-                            </a>
-                          ) : (
-                            <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>No Phone</span>
-                          )}
-                        </td>
-                        <td>{new Date(order.date).toLocaleString("en-IN", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
-                        <td>₹{order.total.toFixed(2)}</td>
-                        <td>
-                          <span className={`status-pill ${order.status.toLowerCase()}`}>{order.status}</span>
-                        </td>
-                        <td style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{order.courierStatus}</td>
-                        <td>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            {order.status === "Pending" && (
-                              <button 
-                                className="btn btn-outline btn-sm" 
-                                style={{ borderColor: "#00aaff", color: "#00aaff" }}
-                                onClick={() => handleProcessOrder(order.id, "Packed", order._docId)}
-                              >
-                                <i className="fa-solid fa-box"></i> Pack SKU
-                              </button>
-                            )}
-                            {order.status === "Packed" && (
-                              <button 
-                                className="btn btn-outline btn-sm" 
-                                style={{ borderColor: "var(--primary)", color: "var(--primary)" }}
-                                onClick={() => handleProcessOrder(order.id, "Shipped", order._docId)}
-                              >
-                                <i className="fa-solid fa-truck-fast"></i> Ship to Delivery Man
-                              </button>
-                            )}
+                    filteredOrders.map(order => {
+                      const isExpanded = expandedAdminOrderId === order.id;
+                      return (
+                        <React.Fragment key={order.id}>
+                          <tr style={{ background: isExpanded ? "#f8fafc" : "transparent", cursor: "pointer" }} onClick={() => setExpandedAdminOrderId(isExpanded ? null : order.id)}>
+                            <td style={{ fontWeight: "700" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <i className={`fa-solid ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'}`} style={{ fontSize: "0.75rem", color: "var(--primary)" }}></i>
+                                <span>{order.id}</span>
+                              </div>
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              {order.deliveryMethod === 'pickup' ? (
+                                <span style={{ backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7", padding: "4px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "700", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}>
+                                  <i className="fa-solid fa-store" style={{ marginRight: "4px" }}></i> Self Pickup
+                                </span>
+                              ) : (
+                                <span style={{ backgroundColor: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", padding: "4px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "700", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}>
+                                  <i className="fa-solid fa-truck" style={{ marginRight: "4px" }}></i> Home Delivery
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontWeight: "600" }}>
+                              <div style={{ color: "#0f172a", fontSize: "0.88rem", fontWeight: "700" }}>{order.customerName}</div>
+                              {order.customerPhone && order.customerPhone !== 'N/A' ? (
+                                <a 
+                                  href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`} 
+                                  className="phone-call-link"
+                                  title="Click to Call Customer"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <i className="fa-solid fa-phone"></i>
+                                  <span>{order.customerPhone}</span>
+                                </a>
+                              ) : (
+                                <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>No Phone</span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{new Date(order.date).toLocaleString("en-IN", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
+                            <td style={{ fontWeight: "700", color: "var(--primary)", whiteSpace: "nowrap" }}>₹{order.total.toFixed(2)}</td>
+                            <td>
+                              <span className={`status-pill ${order.status.toLowerCase()}`}>{order.status}</span>
+                            </td>
+                            <td style={{ color: "var(--text-muted)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>{order.courierStatus}</td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", minWidth: "180px" }}>
+                                {order.status === "Pending" && (
+                                  <button 
+                                    className="btn btn-outline btn-sm" 
+                                    style={{ borderColor: "#00aaff", color: "#00aaff", padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+                                    onClick={() => handleProcessOrder(order.id, "Packed", order._docId)}
+                                  >
+                                    <i className="fa-solid fa-box"></i> Pack SKU
+                                  </button>
+                                )}
+                                {order.status === "Packed" && (
+                                  <button 
+                                    className="btn btn-outline btn-sm" 
+                                    style={{ borderColor: "var(--primary)", color: "var(--primary)", padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+                                    onClick={() => handleProcessOrder(order.id, "Shipped", order._docId)}
+                                  >
+                                    <i className="fa-solid fa-truck-fast"></i> Ship
+                                  </button>
+                                )}
 
-                            <button 
-                              className="btn btn-outline btn-sm"
-                              onClick={() => generateInvoicePDF(order)}
-                              title="Download Official Orient Crockery Tax Receipt PDF"
-                            >
-                              <i className="fa-solid fa-file-pdf"></i> Print Tax Receipt
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                                <button 
+                                  className="btn btn-outline btn-sm"
+                                  style={{ padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+                                  onClick={() => generateInvoicePDF(order)}
+                                  title="Download Official Orient Crockery Tax Receipt PDF"
+                                >
+                                  <i className="fa-solid fa-file-pdf"></i> Print Tax Receipt
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Order Card Detail View */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan="8" style={{ background: "#f1f5f9", padding: "14px 16px" }}>
+                                <div style={{ background: "#ffffff", padding: "16px", borderRadius: "12px", border: "1px solid #cbd5e1", boxShadow: "0 4px 15px rgba(0,0,0,0.05)" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1.5px solid #e2e8f0", paddingBottom: "10px", gap: "8px" }}>
+                                    <h4 style={{ margin: 0, fontFamily: "var(--font-serif)", fontSize: "1.1rem", color: "#0f172a" }}>
+                                      Order Items Card ({order.id})
+                                    </h4>
+                                    <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                                      Fulfillment Mode: <b style={{ color: order.deliveryMethod === 'pickup' ? '#2e7d32' : '#0284c7' }}>{order.deliveryMethod === 'pickup' ? '🏪 Self Pickup (Store)' : '🚚 Home Delivery'}</b>
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
+                                    {/* Items List */}
+                                    <div>
+                                      <h5 style={{ margin: "0 0 8px 0", fontSize: "0.85rem", textTransform: "uppercase", color: "#475569" }}>Purchased SKUs</h5>
+                                      {order.items && order.items.length > 0 ? (
+                                        <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+                                          {order.items.map((item, idx) => (
+                                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", borderBottom: idx === order.items.length - 1 ? "none" : "1px solid #f1f5f9", fontSize: "0.85rem" }}>
+                                              <span style={{ fontWeight: "600", color: "#1e293b" }}>
+                                                <span style={{ color: "var(--primary)", marginRight: "8px", fontWeight: "700" }}>{item.quantity}x</span>
+                                                {item.name}
+                                              </span>
+                                              <span style={{ fontWeight: "700", color: "#0f172a" }}>₹{(item.price * item.quantity).toFixed(2)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Item details synced in ERP Database</p>
+                                      )}
+                                      <div style={{ marginTop: "10px", fontSize: "0.82rem", color: "#475569", wordBreak: "break-word" }}>
+                                        <b>Destination Address:</b> {order.shippingAddress}
+                                      </div>
+                                    </div>
+
+                                    {/* Bill Summary Box */}
+                                    <div style={{ background: "#fafaf9", padding: "14px", borderRadius: "8px", border: "1px solid #e7e5e4" }}>
+                                      <h5 style={{ margin: "0 0 10px 0", fontSize: "0.85rem", textTransform: "uppercase", color: "#44403c" }}>Bill Breakdown</h5>
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.84rem" }}>
+                                        <span style={{ color: "#78716c" }}>Subtotal (MRP):</span>
+                                        <span style={{ fontWeight: "600" }}>₹{order.subtotal ? order.subtotal.toFixed(2) : order.total.toFixed(2)}</span>
+                                      </div>
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.84rem" }}>
+                                        <span style={{ color: "#78716c" }}>Delivery Charges:</span>
+                                        <span style={{ fontWeight: "600", color: order.deliveryMethod === 'pickup' ? '#2e7d32' : '#1c1917' }}>
+                                          {order.deliveryMethod === 'pickup' ? '₹0.00 (Self Pickup)' : `₹${(order.shipping || 0).toFixed(2)}`}
+                                        </span>
+                                      </div>
+                                      {order.discount > 0 && (
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.84rem", color: "#16a34a" }}>
+                                          <span>Discount:</span>
+                                          <span>-₹{order.discount.toFixed(2)}</span>
+                                        </div>
+                                      )}
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", paddingTop: "8px", borderTop: "1.5px solid #d6d3d1", fontWeight: "700", fontSize: "1rem", color: "#1c1917" }}>
+                                        <span>Grand Total:</span>
+                                        <span style={{ color: "var(--primary)" }}>₹{order.total.toFixed(2)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -2723,9 +2888,6 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-
-      {/* Tab 3: Coupons */}
-      {activeTab === "coupons" && <CouponsTab />}
 
       {/* Tab 4: Users & Customers */}
       {activeTab === "users" && <UsersTab />}

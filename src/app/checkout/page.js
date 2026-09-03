@@ -15,6 +15,8 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   // Retrieve checkout figures from localStorage
+  const [deliveryMethod, setDeliveryMethod] = useState("delivery"); // 'delivery' | 'pickup'
+  const [baseShippingFee, setBaseShippingFee] = useState(0);
   const [shippingFee, setShippingFee] = useState(0);
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoCode, setPromoCode] = useState("");
@@ -49,13 +51,25 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     // Load values calculated on cart page
-    setShippingFee(parseFloat(localStorage.getItem("orient_checkout_shipping") || "0"));
+    const savedShipping = parseFloat(localStorage.getItem("orient_checkout_shipping") || "0");
+    setBaseShippingFee(savedShipping);
+    setShippingFee(deliveryMethod === "pickup" ? 0 : savedShipping);
     setPromoDiscount(parseFloat(localStorage.getItem("orient_checkout_promo_disc") || "0"));
     setPromoCode(localStorage.getItem("orient_checkout_promo_code") || "");
-    setOrderTotal(parseFloat(localStorage.getItem("orient_checkout_total") || "0"));
 
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768);
   }, []);
+
+  // Update shipping fee & order total when deliveryMethod changes
+  useEffect(() => {
+    const currentShipping = deliveryMethod === "pickup" ? 0 : baseShippingFee;
+    setShippingFee(currentShipping);
+    
+    // Recalculate grand total
+    const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const calculatedTotal = cartSubtotal + currentShipping - promoDiscount;
+    setOrderTotal(calculatedTotal > 0 ? calculatedTotal : 0);
+  }, [deliveryMethod, baseShippingFee, promoDiscount, cart]);
 
   // Prefill user details if logged in
   useEffect(() => {
@@ -173,10 +187,20 @@ export default function CheckoutPage() {
           items: cart,
           couponCode: promoCode || null,
           shippingFee: shippingFee,
+          deliveryMethod: deliveryMethod,
           customerDetails: {
             userId: user?.id,
             name, email, phone,
-            shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
+            deliveryMethod: deliveryMethod,
+            shippingAddress: { 
+              street: deliveryMethod === "pickup" ? (street || "Store Self Pickup") : street, 
+              area: deliveryMethod === "pickup" ? "Vaishali Nagar" : area, 
+              city: 'Jaipur', 
+              state: 'Rajasthan', 
+              pincode: deliveryMethod === "pickup" ? (shippingPincode || "302021") : shippingPincode, 
+              raw_text: deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
+              delivery_method: deliveryMethod
+            },
             billingAddress: sameAsShipping ? 
               { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
               { street: billingStreet, area: billingArea, city: 'Jaipur', state: 'Rajasthan', pincode: billingPincode }
@@ -209,10 +233,20 @@ export default function CheckoutPage() {
           items: cart,
           couponCode: promoCode || null,
           shippingFee: shippingFee,
+          deliveryMethod: deliveryMethod,
           customerDetails: {
             userId: user?.id,
             name, email, phone,
-            shippingAddress: { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode, raw_text: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}` },
+            deliveryMethod: deliveryMethod,
+            shippingAddress: { 
+              street: deliveryMethod === "pickup" ? (street || "Store Self Pickup") : street, 
+              area: deliveryMethod === "pickup" ? "Vaishali Nagar" : area, 
+              city: 'Jaipur', 
+              state: 'Rajasthan', 
+              pincode: deliveryMethod === "pickup" ? (shippingPincode || "302021") : shippingPincode, 
+              raw_text: deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
+              delivery_method: deliveryMethod
+            },
             billingAddress: sameAsShipping ? 
               { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
               { street: billingStreet, area: billingArea, city: 'Jaipur', state: 'Rajasthan', pincode: billingPincode }
@@ -288,7 +322,8 @@ export default function CheckoutPage() {
       customerName: name,
       customerPhone: phone,
       customerEmail: email,
-      shippingAddress: backendOrderData.shipping_address?.raw_text || `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
+      deliveryMethod: deliveryMethod,
+      shippingAddress: backendOrderData.shipping_address?.raw_text || (deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`),
       items: cart,
       subtotal: backendOrderData.total_mrp || subtotal,
       shipping: backendOrderData.shipping_charge || shippingFee,
@@ -305,7 +340,8 @@ export default function CheckoutPage() {
       customerName: name,
       customerPhone: phone,
       customerEmail: email,
-      shippingAddress: `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
+      deliveryMethod: deliveryMethod,
+      shippingAddress: deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
       items: cart,
       subtotal: subtotal,
       shipping: shippingFee,
@@ -353,16 +389,74 @@ export default function CheckoutPage() {
         <div className="checkout-layout">
           {/* Shipping Form */}
           <div className="checkout-card" style={{ minWidth: 0 }}>
-            <div style={{ marginBottom: "1rem" }}>
-              <button 
-                type="button"
-                onClick={() => router.push('/cart')}
-                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem" }}
-              >
-                <i className="fa-solid fa-arrow-left"></i> Back to Cart
-              </button>
+            {/* Fulfillment Choice: Home Delivery vs Self Pickup */}
+            <div style={{ marginBottom: "1.5rem", padding: "1rem", background: "linear-gradient(135deg, #fdfbf7 0%, #f4eee2 100%)", borderRadius: "12px", border: "1.5px solid #d4af37", boxShadow: "0 4px 15px rgba(212, 175, 55, 0.08)", minWidth: 0 }}>
+              <span className="form-label" style={{ marginBottom: "0.8rem", display: "block", fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--primary)", fontWeight: "700" }}>
+                Select Delivery Mode
+              </span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", minWidth: 0 }}>
+                <div 
+                  onClick={() => setDeliveryMethod("delivery")}
+                  style={{
+                    padding: "0.85rem",
+                    borderRadius: "10px",
+                    border: deliveryMethod === "delivery" ? "2px solid var(--primary)" : "1px solid #d1d5db",
+                    background: deliveryMethod === "delivery" ? "#ffffff" : "#f9fafb",
+                    boxShadow: deliveryMethod === "delivery" ? "0 4px 12px rgba(184, 134, 11, 0.15)" : "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "5px",
+                    minWidth: 0,
+                    wordBreak: "break-word"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+                    <span style={{ fontWeight: "700", color: "#111", fontSize: "0.9rem", display: "inline-flex", alignItems: "center" }}>
+                      <i className="fa-solid fa-truck-fast" style={{ color: "var(--primary)", marginRight: "6px" }}></i> Home Delivery
+                    </span>
+                    <input type="radio" name="deliveryMethodRadio" checked={deliveryMethod === "delivery"} onChange={() => setDeliveryMethod("delivery")} style={{ flexShrink: 0 }} />
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#555", lineHeight: "1.3" }}>Delivered to address. Charges communicated if applicable.</span>
+                </div>
+
+                <div 
+                  onClick={() => setDeliveryMethod("pickup")}
+                  style={{
+                    padding: "0.85rem",
+                    borderRadius: "10px",
+                    border: deliveryMethod === "pickup" ? "2px solid #2e7d32" : "1px solid #d1d5db",
+                    background: deliveryMethod === "pickup" ? "#f1f8e9" : "#f9fafb",
+                    boxShadow: deliveryMethod === "pickup" ? "0 4px 12px rgba(46, 125, 50, 0.15)" : "none",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "5px",
+                    minWidth: 0,
+                    wordBreak: "break-word"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+                    <span style={{ fontWeight: "700", color: "#1b5e20", fontSize: "0.9rem", display: "inline-flex", alignItems: "center" }}>
+                      <i className="fa-solid fa-store" style={{ color: "#2e7d32", marginRight: "6px" }}></i> Self Pickup (FREE)
+                    </span>
+                    <input type="radio" name="deliveryMethodRadio" checked={deliveryMethod === "pickup"} onChange={() => setDeliveryMethod("pickup")} style={{ flexShrink: 0 }} />
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#2e7d32", fontWeight: "600", lineHeight: "1.3" }}>Store pickup. ₹0 Delivery Fee!</span>
+                </div>
+              </div>
+
+              {deliveryMethod === "pickup" && (
+                <div style={{ marginTop: "0.8rem", padding: "0.7rem 0.9rem", background: "#e8f5e9", borderRadius: "8px", border: "1px solid #a5d6a7", fontSize: "0.82rem", color: "#1b5e20", lineHeight: "1.4" }}>
+                  <i className="fa-solid fa-circle-info" style={{ marginRight: "6px" }}></i>
+                  <b>Pickup Store:</b> Orient Crockeries, Vaishali Nagar, Jaipur. You will receive notification when packed.
+                </div>
+              )}
             </div>
-            <h2 className="checkout-section-title">Shipping &amp; Billing Details</h2>
+
+            <h2 className="checkout-section-title">{deliveryMethod === "pickup" ? "Contact & Pickup Details" : "Shipping & Billing Details"}</h2>
             
             <div className="form-grid">
               <div className="form-group">

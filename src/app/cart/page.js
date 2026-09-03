@@ -15,13 +15,9 @@ export default function CartPage() {
   
   const router = useRouter();
 
-  // Promo code & Gift Voucher states
+  // Promo code & Gift Voucher state (supports additive stacking)
   const [promoInput, setPromoInput] = useState("");
-  const [promoDiscount, setPromoDiscount] = useState(0);
-  const [promoApplied, setPromoApplied] = useState("");
-
-  const [voucherDiscount, setVoucherDiscount] = useState(0);
-  const [voucherApplied, setVoucherApplied] = useState("");
+  const [appliedCoupons, setAppliedCoupons] = useState([]); // [{ code, isAdditive, discountAmount, isGiftVoucher }]
 
   // Toast Notification State
   const [toastMessage, setToastMessage] = useState("");
@@ -49,22 +45,29 @@ export default function CartPage() {
         body: JSON.stringify({ 
           code, 
           cartValue: cartSubtotal,
-          cartItems: cart 
+          cartItems: cart,
+          activeCoupons: appliedCoupons
         })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        if (data.coupon.isGiftVoucher) {
-          setVoucherDiscount(data.discountAmount);
-          setVoucherApplied(data.coupon.code);
-          showToast(`🎁 Gift Voucher ${data.coupon.code} applied! (-₹${data.discountAmount})`, "success");
-        } else {
-          setPromoDiscount(data.discountAmount);
-          setPromoApplied(data.coupon.code);
-          showToast(`🎉 Coupon ${data.coupon.code} applied! (-₹${data.discountAmount})`, "success");
-        }
+        const newCoupon = {
+          code: data.coupon.code,
+          isAdditive: data.coupon.isAdditive,
+          discountAmount: data.discountAmount,
+          isGiftVoucher: data.coupon.isGiftVoucher
+        };
+
+        setAppliedCoupons(prev => {
+          // Prevent duplicates if clicked multiple times quickly
+          if (prev.some(c => c.code === newCoupon.code)) {
+            return prev;
+          }
+          return [...prev, newCoupon];
+        });
+        showToast(`🎉 ${data.message} (-₹${data.discountAmount})`, "success");
         setPromoInput("");
       } else {
         showToast(`❌ ${data.message || "Invalid promotional code."}`, "error");
@@ -75,25 +78,18 @@ export default function CartPage() {
     }
   };
 
-  const removeCoupon = (type) => {
-    if (type === 'promo') {
-      setPromoDiscount(0);
-      setPromoApplied("");
-      showToast("Promo coupon removed", "success");
-    } else {
-      setVoucherDiscount(0);
-      setVoucherApplied("");
-      showToast("Gift voucher removed", "success");
-    }
+  const removeCouponByCode = (codeToRemove) => {
+    setAppliedCoupons(prev => prev.filter(c => c.code !== codeToRemove));
+    showToast(`Coupon ${codeToRemove} removed`, "success");
   };
 
   // Shipping Fee (Free shipping above ₹999, else ₹99)
   const shippingFee = cartSubtotal >= 999 || cartSubtotal === 0 ? 0 : 99;
 
-  // Total Combined Discount
-  const totalDiscount = promoDiscount + voucherDiscount;
+  // Total Combined Discount across all applied coupons/vouchers
+  const totalDiscount = appliedCoupons.reduce((sum, c) => sum + (c.discountAmount || 0), 0);
 
-  // Final Total (Shipping calculated at checkout)
+  // Final Total
   const finalTotal = Math.max(0, cartSubtotal - totalDiscount);
 
   const handleCheckout = () => {
@@ -101,7 +97,7 @@ export default function CartPage() {
     localStorage.setItem("orient_checkout_shipping", "0"); // Will be calculated on checkout page
     localStorage.setItem("orient_checkout_loyalty_disc", "0");
     localStorage.setItem("orient_checkout_promo_disc", totalDiscount.toString());
-    localStorage.setItem("orient_checkout_promo_code", promoApplied ? (voucherApplied ? `${promoApplied}, ${voucherApplied}` : promoApplied) : voucherApplied);
+    localStorage.setItem("orient_checkout_promo_code", appliedCoupons.map(c => c.code).join(", "));
     localStorage.setItem("orient_checkout_total", finalTotal.toString());
     
     router.push("/checkout");
@@ -177,24 +173,25 @@ export default function CartPage() {
                 <button type="submit" className="btn btn-outline btn-sm">Apply</button>
               </form>
               <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "8px" }}>
-                Enter promo coupon or stackable gift voucher code.
+                Supports Exclusive and Additive (Stackable) coupons.
               </p>
             </div>
 
-            {/* Calculations Breakdown */}
-            {promoApplied && (
-              <div className="summary-row" style={{ color: "var(--success)" }}>
-                <span>Coupon ({promoApplied}) <button onClick={() => removeCoupon('promo')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem' }}>(Remove)</button></span>
-                <span>-₹{promoDiscount.toFixed(2)}</span>
+            {/* Applied Coupons Breakdown */}
+            {appliedCoupons.map((c, index) => (
+              <div key={`${c.code}-${index}`} className="summary-row" style={{ color: c.isAdditive ? "#10b981" : "var(--primary)" }}>
+                <span>
+                  {c.isGiftVoucher ? "🎁 Gift Voucher" : (c.isAdditive ? "➕ Additive Coupon" : "🔒 Coupon")} ({c.code}) 
+                  <button 
+                    onClick={() => removeCouponByCode(c.code)} 
+                    style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', marginLeft: '6px' }}
+                  >
+                    (Remove)
+                  </button>
+                </span>
+                <span>-₹{c.discountAmount.toFixed(2)}</span>
               </div>
-            )}
-
-            {voucherApplied && (
-              <div className="summary-row" style={{ color: "#d97706" }}>
-                <span>Gift Voucher ({voucherApplied}) <button onClick={() => removeCoupon('voucher')} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem' }}>(Remove)</button></span>
-                <span>-₹{voucherDiscount.toFixed(2)}</span>
-              </div>
-            )}
+            ))}
 
             <div className="summary-row">
               <span>Shipping Fee</span>
@@ -212,6 +209,7 @@ export default function CartPage() {
           </aside>
         </div>
       )}
+
 
       {/* Floating Toast Notification */}
       {toastMessage && (
