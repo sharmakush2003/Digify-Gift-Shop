@@ -29,6 +29,7 @@ export default function CheckoutPage() {
   const [street, setStreet] = useState("");
   const [area, setArea] = useState("Vaishali Nagar");
   const [shippingPincode, setShippingPincode] = useState("");
+  const [giftPackaging, setGiftPackaging] = useState("standard"); // 'standard' | 'gift'
   
   const [sameAsShipping, setSameAsShipping] = useState(true);
   const [billingStreet, setBillingStreet] = useState("");
@@ -238,6 +239,7 @@ export default function CheckoutPage() {
             userId: user?.id,
             name, email, phone,
             deliveryMethod: deliveryMethod,
+            giftPackaging: giftPackaging,
             shippingAddress: { 
               street: deliveryMethod === "pickup" ? (street || "Store Self Pickup") : street, 
               area: deliveryMethod === "pickup" ? "Vaishali Nagar" : area, 
@@ -245,7 +247,8 @@ export default function CheckoutPage() {
               state: 'Rajasthan', 
               pincode: deliveryMethod === "pickup" ? (shippingPincode || "302021") : shippingPincode, 
               raw_text: deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
-              delivery_method: deliveryMethod
+              delivery_method: deliveryMethod,
+              gift_packaging: giftPackaging
             },
             billingAddress: sameAsShipping ? 
               { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
@@ -454,6 +457,68 @@ export default function CheckoutPage() {
                   <b>Pickup Store:</b> Orient Crockeries, Vaishali Nagar, Jaipur. You will receive notification when packed.
                 </div>
               )}
+
+              {/* Gift Packaging Choice Card Selector */}
+              <div style={{ marginTop: "1.4rem", paddingTop: "1rem", borderTop: "1px dashed #cbd5e1" }}>
+                <span className="form-label" style={{ marginBottom: "0.5rem", fontSize: "0.92rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", color: "#0f172a" }}>
+                  <i className="fa-solid fa-gift" style={{ color: "#d97706" }}></i> Packaging & Gift Wrap Preferences
+                </span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginTop: "8px" }}>
+                  <div 
+                    onClick={() => setGiftPackaging("standard")}
+                    style={{
+                      padding: "0.8rem",
+                      borderRadius: "10px",
+                      border: giftPackaging === "standard" ? "2px solid var(--primary)" : "1px solid #cbd5e1",
+                      background: giftPackaging === "standard" ? "#ffffff" : "#f8fafc",
+                      boxShadow: giftPackaging === "standard" ? "0 4px 12px rgba(184, 134, 11, 0.15)" : "none",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+                      <span style={{ fontWeight: "700", color: "#1e293b", fontSize: "0.85rem", display: "inline-flex", alignItems: "center" }}>
+                        <i className="fa-solid fa-box-open" style={{ color: "#64748b", marginRight: "6px" }}></i> Standard Box
+                      </span>
+                      <input type="radio" name="giftPackagingRadio" checked={giftPackaging === "standard"} onChange={() => setGiftPackaging("standard")} style={{ flexShrink: 0 }} />
+                    </div>
+                    <span style={{ fontSize: "0.74rem", color: "#64748b", lineHeight: "1.3" }}>Protective box packaging.</span>
+                  </div>
+
+                  <div 
+                    onClick={() => setGiftPackaging("gift")}
+                    style={{
+                      padding: "0.8rem",
+                      borderRadius: "10px",
+                      border: giftPackaging === "gift" ? "2px solid #db2777" : "1px solid #cbd5e1",
+                      background: giftPackaging === "gift" ? "#fdf2f8" : "#f8fafc",
+                      boxShadow: giftPackaging === "gift" ? "0 4px 12px rgba(219, 39, 119, 0.15)" : "none",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px" }}>
+                      <span style={{ fontWeight: "700", color: "#831843", fontSize: "0.85rem", display: "inline-flex", alignItems: "center" }}>
+                        <i className="fa-solid fa-ribbon" style={{ color: "#db2777", marginRight: "6px" }}></i> Gift Wrap 🎀
+                      </span>
+                      <input type="radio" name="giftPackagingRadio" checked={giftPackaging === "gift"} onChange={() => setGiftPackaging("gift")} style={{ flexShrink: 0 }} />
+                    </div>
+                    <span style={{ fontSize: "0.74rem", color: "#be185d", fontWeight: "600", lineHeight: "1.3" }}>Luxury paper & Satin ribbon!</span>
+                  </div>
+                </div>
+                {giftPackaging === "gift" && (
+                  <div style={{ marginTop: "0.7rem", padding: "0.6rem 0.8rem", background: "#fdf2f8", borderRadius: "8px", border: "1px solid #fbcfe8", fontSize: "0.8rem", color: "#9d174d", lineHeight: "1.4" }}>
+                    <i className="fa-solid fa-circle-check" style={{ marginRight: "6px" }}></i>
+                    <b>Gift Wrap Request Tagged:</b> Warehouse will wrap your items in gift paper with ribbon!
+                  </div>
+                )}
+              </div>
             </div>
 
             <h2 className="checkout-section-title">{deliveryMethod === "pickup" ? "Contact & Pickup Details" : "Shipping & Billing Details"}</h2>

@@ -132,7 +132,12 @@ export default function AdminPage() {
     category: "General"
   });
 
-  // Single Upload states
+  // Single Upload & Custom Department/Category states
+  const [isCustomDept, setIsCustomDept] = useState(false);
+  const [isCustomCat, setIsCustomCat] = useState(false);
+  const [isEditCustomDept, setIsEditCustomDept] = useState(false);
+  const [isEditCustomCat, setIsEditCustomCat] = useState(false);
+
   const [singleUploadImages, setSingleUploadImages] = useState([]);
   const [isSingleUploading, setIsSingleUploading] = useState(false);
   const [singleUploadStatus, setSingleUploadStatus] = useState("");
@@ -584,6 +589,20 @@ export default function AdminPage() {
     
     return matchesSearch && matchesStatus && matchesDateRange;
   });
+
+  // Dynamic Unique Departments and Categories
+  const defaultDepts = ["Crockery & Dining", "Glassware & Barware", "Cookware", "Woodcraft", "Home Décor", "Gifting"];
+  const defaultCats = ["General", "Dinner Sets", "Tea & Coffee Sets", "Bowls & Plates", "Wine Glasses", "Cutlery", "Vases & Decor", "Hampers"];
+  
+  const allDepartments = Array.from(new Set([
+    ...defaultDepts,
+    ...productsList.map(p => p.department).filter(Boolean)
+  ]));
+
+  const allCategories = Array.from(new Set([
+    ...defaultCats,
+    ...productsList.map(p => p.category).filter(Boolean)
+  ]));
 
   const exportOrdersToCSV = () => {
     // Export all past orders (older than 48 hours)
@@ -2002,19 +2021,96 @@ export default function AdminPage() {
                     <option value="28">28% GST</option>
                   </select>
                 </div>
-                <div className="form-group full-width">
-                  <span className="form-label">Department</span>
-                  <select 
-                    className="sort-select"
-                    value={newProduct.department}
-                    onChange={(e) => setNewProduct({ ...newProduct, department: e.target.value })}
-                  >
-                    <option value="Gifting">Gifting</option>
-                    <option value="Crockery & Dining">Crockery & Dining</option>
-                    <option value="Cookware">Cookware</option>
-                    <option value="Woodcraft">Woodcraft</option>
-                    <option value="Home Décor">Home Décor</option>
-                  </select>
+                <div className="form-group full-width" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  {/* Department Selector / Custom Creator */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span className="form-label" style={{ marginBottom: 0 }}>Department</span>
+                      {isCustomDept && (
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsCustomDept(false); setNewProduct({ ...newProduct, department: allDepartments[0] || "Crockery & Dining" }); }}
+                          style={{ background: "none", border: "none", color: "var(--primary)", fontSize: "0.72rem", cursor: "pointer", fontWeight: "700" }}
+                        >
+                          [Select Existing]
+                        </button>
+                      )}
+                    </div>
+                    {isCustomDept ? (
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Type custom department..."
+                        value={newProduct.department}
+                        onChange={(e) => setNewProduct({ ...newProduct, department: e.target.value })}
+                        required
+                      />
+                    ) : (
+                      <select 
+                        className="sort-select"
+                        style={{ width: "100%", padding: "10px 12px" }}
+                        value={newProduct.department}
+                        onChange={(e) => {
+                          if (e.target.value === "__ADD_CUSTOM__") {
+                            setIsCustomDept(true);
+                            setNewProduct({ ...newProduct, department: "" });
+                          } else {
+                            setNewProduct({ ...newProduct, department: e.target.value });
+                          }
+                        }}
+                      >
+                        {allDepartments.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                        <option value="__ADD_CUSTOM__">➕ Add Custom Department...</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Category Selector / Custom Creator */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span className="form-label" style={{ marginBottom: 0 }}>Category</span>
+                      {isCustomCat && (
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsCustomCat(false); setNewProduct({ ...newProduct, category: allCategories[0] || "General" }); }}
+                          style={{ background: "none", border: "none", color: "var(--primary)", fontSize: "0.72rem", cursor: "pointer", fontWeight: "700" }}
+                        >
+                          [Select Existing]
+                        </button>
+                      )}
+                    </div>
+                    {isCustomCat ? (
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Type custom category..."
+                        value={newProduct.category}
+                        onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                        required
+                      />
+                    ) : (
+                      <select 
+                        className="sort-select"
+                        style={{ width: "100%", padding: "10px 12px" }}
+                        value={newProduct.category}
+                        onChange={(e) => {
+                          if (e.target.value === "__ADD_CUSTOM__") {
+                            setIsCustomCat(true);
+                            setNewProduct({ ...newProduct, category: "" });
+                          } else {
+                            setNewProduct({ ...newProduct, category: e.target.value });
+                          }
+                        }}
+                      >
+                        {allCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        <option value="__ADD_CUSTOM__">➕ Add Custom Category...</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
                 <div className="form-group full-width" style={{ marginTop: "10px" }}>
                   <span className="form-label">Product Description</span>
@@ -2215,19 +2311,96 @@ export default function AdminPage() {
                   </select>
                 </div>
 
-                <div className="form-group full-width">
-                  <span className="form-label">Department</span>
-                  <select 
-                    className="sort-select"
-                    value={editingProduct.department}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, department: e.target.value })}
-                  >
-                    <option value="Gifting">Gifting</option>
-                    <option value="Crockery & Dining">Crockery & Dining</option>
-                    <option value="Cookware">Cookware</option>
-                    <option value="Woodcraft">Woodcraft</option>
-                    <option value="Home Décor">Home Décor</option>
-                  </select>
+                <div className="form-group full-width" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  {/* Department Selector / Custom Creator */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span className="form-label" style={{ marginBottom: 0 }}>Department</span>
+                      {isEditCustomDept && (
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsEditCustomDept(false); setEditingProduct({ ...editingProduct, department: allDepartments[0] || "Crockery & Dining" }); }}
+                          style={{ background: "none", border: "none", color: "var(--primary)", fontSize: "0.72rem", cursor: "pointer", fontWeight: "700" }}
+                        >
+                          [Select Existing]
+                        </button>
+                      )}
+                    </div>
+                    {isEditCustomDept ? (
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Type custom department..."
+                        value={editingProduct.department || ""}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, department: e.target.value })}
+                        required
+                      />
+                    ) : (
+                      <select 
+                        className="sort-select"
+                        style={{ width: "100%", padding: "10px 12px" }}
+                        value={editingProduct.department || ""}
+                        onChange={(e) => {
+                          if (e.target.value === "__ADD_CUSTOM__") {
+                            setIsEditCustomDept(true);
+                            setEditingProduct({ ...editingProduct, department: "" });
+                          } else {
+                            setEditingProduct({ ...editingProduct, department: e.target.value });
+                          }
+                        }}
+                      >
+                        {allDepartments.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                        <option value="__ADD_CUSTOM__">➕ Add Custom Department...</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Category Selector / Custom Creator */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span className="form-label" style={{ marginBottom: 0 }}>Category</span>
+                      {isEditCustomCat && (
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsEditCustomCat(false); setEditingProduct({ ...editingProduct, category: allCategories[0] || "General" }); }}
+                          style={{ background: "none", border: "none", color: "var(--primary)", fontSize: "0.72rem", cursor: "pointer", fontWeight: "700" }}
+                        >
+                          [Select Existing]
+                        </button>
+                      )}
+                    </div>
+                    {isEditCustomCat ? (
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Type custom category..."
+                        value={editingProduct.category || ""}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                        required
+                      />
+                    ) : (
+                      <select 
+                        className="sort-select"
+                        style={{ width: "100%", padding: "10px 12px" }}
+                        value={editingProduct.category || "General"}
+                        onChange={(e) => {
+                          if (e.target.value === "__ADD_CUSTOM__") {
+                            setIsEditCustomCat(true);
+                            setEditingProduct({ ...editingProduct, category: "" });
+                          } else {
+                            setEditingProduct({ ...editingProduct, category: e.target.value });
+                          }
+                        }}
+                      >
+                        {allCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        <option value="__ADD_CUSTOM__">➕ Add Custom Category...</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
 
                 {/* Existing Images Gallery */}

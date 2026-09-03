@@ -23,17 +23,35 @@ function CatalogContent() {
   const { products, addToCart, wishlist, toggleWishlist, isInWishlist } = useApp();
   const searchParams = useSearchParams();
 
-  // Filter States
+  // Multi-Dimension Filter States
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepts, setSelectedDepts] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedCollections, setSelectedCollections] = useState([]);
+  const [priceRange, setPriceRange] = useState("all"); // 'all' | 'under999' | '1000-2499' | '2500-4999' | '5000+'
   const [selectedFragile, setSelectedFragile] = useState("all");
   const [selectedMicrowave, setSelectedMicrowave] = useState("all");
   const [sortOption, setSortOption] = useState("default");
-  
+
+  // Accordion Open/Closed States
+  const [openSections, setOpenSections] = useState({
+    depts: true,
+    categories: true,
+    brands: true,
+    collections: true,
+    price: true,
+    handling: false
+  });
+
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -49,25 +67,119 @@ function CatalogContent() {
 
   // Read URL parameters
   const deptParam = searchParams.get("department");
+  const catParam = searchParams.get("category");
   const wishlistOnly = searchParams.get("wishlist") === "true";
 
   useEffect(() => {
     if (deptParam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedDepts([deptParam]);
     } else {
       setSelectedDepts([]);
     }
-  }, [deptParam]);
+    if (catParam) {
+      setSelectedCategories([catParam]);
+    }
+  }, [deptParam, catParam]);
 
-  // Extract unique departments & categories from products
-  const departments = Array.from(new Set(products.map(p => p.department))).filter(Boolean);
+  // Helper function to map brand & collection dynamically for any product
+  const getProductMeta = (product) => {
+    const nameLower = (product.name || "").toLowerCase();
+    const descLower = (product.description || "").toLowerCase();
+    
+    let brand = product.brand || "Orient Luxury";
+    let collection = product.collection || "Festive Fine Dining";
 
-  const handleDeptToggle = (dept) => {
-    setSelectedDepts(prev => 
-      prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]
-    );
+    if (nameLower.includes("wood") || descLower.includes("wood")) {
+      brand = "Mastercraft Wood";
+      collection = "Artisanal Woodcraft";
+    } else if (nameLower.includes("glass") || nameLower.includes("wine") || nameLower.includes("tea")) {
+      brand = "Ocean Glassware";
+      collection = "Modern Barware & Teaware";
+    } else if (nameLower.includes("royal") || nameLower.includes("gold") || product.price > 2500) {
+      brand = "Royal Porcelain";
+      collection = "Royal Gold Edition";
+    } else if (product.price > 1500) {
+      brand = "Luminarc Opalware";
+      collection = "Minimalist Modern Dining";
+    } else if (product.department === "Cookware") {
+      brand = "Borosil Premium";
+      collection = "Chef Special Cookware";
+    }
+
+    return { brand, collection };
   };
+
+  // Unique Departments, Categories, Brands & Collections
+  const departments = Array.from(new Set(products.map(p => p.department))).filter(Boolean);
+  const categories = Array.from(new Set(products.map(p => p.category))).filter(Boolean);
+
+  const availableBrands = Array.from(new Set([
+    "Orient Luxury", "Royal Porcelain", "Ocean Glassware", "Luminarc Opalware", "Borosil Premium", "Mastercraft Wood"
+  ]));
+
+  const availableCollections = Array.from(new Set([
+    "Festive Fine Dining", "Royal Gold Edition", "Modern Barware & Teaware", "Minimalist Modern Dining", "Artisanal Woodcraft"
+  ]));
+
+  // Smooth scroll down to products grid when any filter is toggled
+  const scrollToProductsGrid = () => {
+    setTimeout(() => {
+      const gridElem = document.getElementById("catalog-products-main");
+      if (gridElem) {
+        const topOffset = gridElem.getBoundingClientRect().top + window.scrollY - 100;
+        window.scrollTo({ top: topOffset, behavior: "smooth" });
+      }
+    }, 100);
+  };
+
+  // Toggle Handlers with auto smooth-scroll to product grid
+  const handleDeptToggle = (dept) => {
+    setSelectedDepts(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
+    scrollToProductsGrid();
+  };
+
+  const handleCategoryToggle = (cat) => {
+    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+    scrollToProductsGrid();
+  };
+
+  const handleBrandToggle = (b) => {
+    setSelectedBrands(prev => prev.includes(b) ? prev.filter(item => item !== b) : [...prev, b]);
+    scrollToProductsGrid();
+  };
+
+  const handleCollectionToggle = (col) => {
+    setSelectedCollections(prev => prev.includes(col) ? prev.filter(item => item !== col) : [...prev, col]);
+    scrollToProductsGrid();
+  };
+
+  const handlePriceRangeChange = (val) => {
+    setPriceRange(val);
+    scrollToProductsGrid();
+  };
+
+  const handleFragileChange = (val) => {
+    setSelectedFragile(val);
+    scrollToProductsGrid();
+  };
+
+  const handleMicrowaveChange = (val) => {
+    setSelectedMicrowave(val);
+    scrollToProductsGrid();
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setSelectedDepts([]);
+    setSelectedCategories([]);
+    setSelectedBrands([]);
+    setSelectedCollections([]);
+    setPriceRange("all");
+    setSelectedFragile("all");
+    setSelectedMicrowave("all");
+  };
+
+  const totalActiveFiltersCount = selectedDepts.length + selectedCategories.length + selectedBrands.length + selectedCollections.length + (priceRange !== "all" ? 1 : 0) + (selectedFragile !== "all" ? 1 : 0) + (selectedMicrowave !== "all" ? 1 : 0) + (searchTerm ? 1 : 0);
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
@@ -92,11 +204,16 @@ function CatalogContent() {
     }
   };
 
-  // Filtering Logic
+  // Multi-Dimension Filtering Logic
   let filteredProducts = products.filter(product => {
+    const meta = getProductMeta(product);
+
     // Search filter
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = !searchTerm.trim() || 
+                          product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          meta.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          meta.collection.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (product.barcode && product.barcode.includes(searchTerm));
     
     // Wishlist-only filter
@@ -104,6 +221,23 @@ function CatalogContent() {
 
     // Department filter
     const matchesDept = selectedDepts.length === 0 || selectedDepts.includes(product.department);
+
+    // Category filter
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category);
+
+    // Brand filter
+    const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(meta.brand);
+
+    // Collection filter
+    const matchesCollection = selectedCollections.length === 0 || selectedCollections.includes(meta.collection);
+
+    // Price Range filter
+    const price = parseFloat(product.price || 0);
+    const matchesPrice = priceRange === "all" ||
+                         (priceRange === "under999" && price < 1000) ||
+                         (priceRange === "1000-2499" && price >= 1000 && price <= 2499) ||
+                         (priceRange === "2500-4999" && price >= 2500 && price <= 4999) ||
+                         (priceRange === "5000+" && price >= 5000);
 
     // Fragile filter
     const matchesFragile = selectedFragile === "all" || 
@@ -115,7 +249,7 @@ function CatalogContent() {
       (selectedMicrowave === "safe" && product.microwave) || 
       (selectedMicrowave === "not-safe" && !product.microwave);
 
-    return matchesSearch && matchesWishlist && matchesDept && matchesFragile && matchesMicrowave;
+    return matchesSearch && matchesWishlist && matchesDept && matchesCategory && matchesBrand && matchesCollection && matchesPrice && matchesFragile && matchesMicrowave;
   });
 
   // Sorting Logic
@@ -136,104 +270,265 @@ function CatalogContent() {
       </h1>
 
       <div className="catalog-layout">
-        {/* Filter Sidebar */}
-        <aside className="filter-sidebar">
+        {/* Modern E-Commerce Filter Sidebar (Flipkart / Amazon Style) */}
+        <aside className="filter-sidebar-pro">
           {wishlistOnly && (
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: "1rem" }}>
               <Link href="/catalog" style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: "600", textTransform: "uppercase" }}>
                 &larr; Back to Full Catalog
               </Link>
             </div>
           )}
 
-          {/* Department Filter */}
-          <div className="filter-group">
-            <h4 className="filter-group-title">Departments</h4>
-            <div className="filter-options">
-              {departments.map(dept => (
-                <label key={dept} className="filter-checkbox-label">
-                  <input 
-                    type="checkbox" 
-                    checked={selectedDepts.includes(dept)}
-                    onChange={() => handleDeptToggle(dept)}
-                  />
-                  <span>{dept}</span>
+          {/* Filter Header Bar */}
+          <div className="filter-header-bar">
+            <h3 className="filter-header-title">
+              <i className="fa-solid fa-sliders" style={{ color: "var(--primary)" }}></i> Filters
+              {totalActiveFiltersCount > 0 && <span className="filter-badge-count">{totalActiveFiltersCount}</span>}
+            </h3>
+            {totalActiveFiltersCount > 0 && (
+              <button onClick={handleResetFilters} className="btn-reset-filters">Clear All</button>
+            )}
+          </div>
+
+          {/* 1. Departments Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("depts")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-layer-group" style={{ color: "#64748b" }}></i> Departments
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.depts ? "open" : ""}`}></i>
+            </div>
+            {openSections.depts && (
+              <div className="accordion-body">
+                {departments.map(dept => {
+                  const count = products.filter(p => p.department === dept).length;
+                  return (
+                    <label key={dept} className="filter-item-pro">
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedDepts.includes(dept)}
+                          onChange={() => handleDeptToggle(dept)}
+                        />
+                        <span>{dept}</span>
+                      </div>
+                      <span className="filter-count-label">({count})</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Shop by Category Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("categories")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-tags" style={{ color: "#0284c7" }}></i> Shop by Category
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.categories ? "open" : ""}`}></i>
+            </div>
+            {openSections.categories && (
+              <div className="accordion-body">
+                {categories.map(cat => {
+                  const count = products.filter(p => p.category === cat).length;
+                  return (
+                    <label key={cat} className="filter-item-pro">
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedCategories.includes(cat)}
+                          onChange={() => handleCategoryToggle(cat)}
+                        />
+                        <span>{cat}</span>
+                      </div>
+                      <span className="filter-count-label">({count})</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Shop by Brand Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("brands")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-[#d97706] fa-crown" style={{ color: "#d97706" }}></i> Shop by Brand
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.brands ? "open" : ""}`}></i>
+            </div>
+            {openSections.brands && (
+              <div className="accordion-body">
+                {availableBrands.map(b => (
+                  <label key={b} className="filter-item-pro">
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedBrands.includes(b)}
+                        onChange={() => handleBrandToggle(b)}
+                      />
+                      <span>{b}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Shop by Collection Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("collections")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-gem" style={{ color: "#9333ea" }}></i> Shop by Collection
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.collections ? "open" : ""}`}></i>
+            </div>
+            {openSections.collections && (
+              <div className="accordion-body">
+                {availableCollections.map(col => (
+                  <label key={col} className="filter-item-pro">
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedCollections.includes(col)}
+                        onChange={() => handleCollectionToggle(col)}
+                      />
+                      <span>{col}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 5. Price Range Filter Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("price")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-indian-rupee-sign" style={{ color: "#16a34a" }}></i> Price Range
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.price ? "open" : ""}`}></i>
+            </div>
+            {openSections.price && (
+              <div className="accordion-body">
+                {[
+                  { label: "All Prices", value: "all" },
+                  { label: "Under ₹999", value: "under999" },
+                  { label: "₹1,000 - ₹2,499", value: "1000-2499" },
+                  { label: "₹2,500 - ₹4,999", value: "2500-4999" },
+                  { label: "₹5,000 & Above", value: "5000+" }
+                ].map(pr => (
+                  <label key={pr.value} className="filter-item-pro">
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <input 
+                        type="radio" 
+                        name="priceRangeRadio" 
+                        checked={priceRange === pr.value}
+                        onChange={() => handlePriceRangeChange(pr.value)}
+                      />
+                      <span>{pr.label}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 6. Material Handling & Safety Accordion */}
+          <div className="accordion-group">
+            <div className="accordion-header" onClick={() => toggleSection("handling")}>
+              <h4 className="accordion-title">
+                <i className="fa-solid fa-shield-halved" style={{ color: "#ea580c" }}></i> Material & Safety
+              </h4>
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.handling ? "open" : ""}`}></i>
+            </div>
+            {openSections.handling && (
+              <div className="accordion-body">
+                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "4px" }}>Fragility</span>
+                <label className="filter-item-pro">
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <input type="radio" name="fragile" checked={selectedFragile === "all"} onChange={() => handleFragileChange("all")} />
+                    <span>All Items</span>
+                  </div>
                 </label>
-              ))}
-            </div>
-          </div>
+                <label className="filter-item-pro">
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <input type="radio" name="fragile" checked={selectedFragile === "fragile"} onChange={() => handleFragileChange("fragile")} />
+                    <span>Fragile Only</span>
+                  </div>
+                </label>
 
-          {/* Fragility Filter */}
-          <div className="filter-group">
-            <h4 className="filter-group-title">Material Handling</h4>
-            <div className="filter-options">
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="fragile" 
-                  checked={selectedFragile === "all"}
-                  onChange={() => setSelectedFragile("all")}
-                />
-                <span>All Materials</span>
-              </label>
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="fragile" 
-                  checked={selectedFragile === "fragile"}
-                  onChange={() => setSelectedFragile("fragile")}
-                />
-                <span>Fragile Only</span>
-              </label>
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="fragile" 
-                  checked={selectedFragile === "standard"}
-                  onChange={() => setSelectedFragile("standard")}
-                />
-                <span>Standard Handling</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Microwave Safety */}
-          <div className="filter-group">
-            <h4 className="filter-group-title">Microwave Safety</h4>
-            <div className="filter-options">
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="microwave" 
-                  checked={selectedMicrowave === "all"}
-                  onChange={() => setSelectedMicrowave("all")}
-                />
-                <span>All Items</span>
-              </label>
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="microwave" 
-                  checked={selectedMicrowave === "safe"}
-                  onChange={() => setSelectedMicrowave("safe")}
-                />
-                <span>Microwave Safe</span>
-              </label>
-              <label className="filter-checkbox-label">
-                <input 
-                  type="radio" 
-                  name="microwave" 
-                  checked={selectedMicrowave === "not-safe"}
-                  onChange={() => setSelectedMicrowave("not-safe")}
-                />
-                <span>Not Recommended</span>
-              </label>
-            </div>
+                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "8px" }}>Microwave Safety</span>
+                <label className="filter-item-pro">
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <input type="radio" name="microwave" checked={selectedMicrowave === "all"} onChange={() => handleMicrowaveChange("all")} />
+                    <span>All Items</span>
+                  </div>
+                </label>
+                <label className="filter-item-pro">
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <input type="radio" name="microwave" checked={selectedMicrowave === "safe"} onChange={() => handleMicrowaveChange("safe")} />
+                    <span>Microwave Safe</span>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
         </aside>
 
         {/* Catalog Main Panel */}
-        <main>
+        <main id="catalog-products-main">
+          {/* Active Filter Chips Bar */}
+          {totalActiveFiltersCount > 0 && (
+            <div className="active-chips-bar">
+              <span style={{ fontSize: "0.78rem", fontWeight: "700", color: "#475569", textTransform: "uppercase" }}>Active Filters:</span>
+              
+              {selectedDepts.map(d => (
+                <span key={d} className="filter-chip">
+                  Dept: {d} <button onClick={() => handleDeptToggle(d)}>×</button>
+                </span>
+              ))}
+
+              {selectedCategories.map(c => (
+                <span key={c} className="filter-chip">
+                  Cat: {c} <button onClick={() => handleCategoryToggle(c)}>×</button>
+                </span>
+              ))}
+
+              {selectedBrands.map(b => (
+                <span key={b} className="filter-chip">
+                  Brand: {b} <button onClick={() => handleBrandToggle(b)}>×</button>
+                </span>
+              ))}
+
+              {selectedCollections.map(col => (
+                <span key={col} className="filter-chip">
+                  Collection: {col} <button onClick={() => handleCollectionToggle(col)}>×</button>
+                </span>
+              ))}
+
+              {priceRange !== "all" && (
+                <span className="filter-chip">
+                  Price: {priceRange} <button onClick={() => setPriceRange("all")}>×</button>
+                </span>
+              )}
+
+              {searchTerm && (
+                <span className="filter-chip">
+                  Search: "{searchTerm}" <button onClick={() => setSearchTerm("")}>×</button>
+                </span>
+              )}
+
+              <button 
+                onClick={handleResetFilters} 
+                style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.78rem", fontWeight: "700", cursor: "pointer", marginLeft: "auto" }}
+              >
+                Reset All
+              </button>
+            </div>
+          )}
           {/* Search Box */}
           <div className="search-box">
             <i className="fa-solid fa-magnifying-glass search-icon-inside"></i>
@@ -481,6 +776,46 @@ function CatalogContent() {
           </div>
         </div>
       )}
+
+      {/* Floating Filter Quick Action Button */}
+      <div style={{ position: "fixed", bottom: "30px", left: "30px", zIndex: 990 }}>
+        <button 
+          type="button"
+          onClick={() => {
+            const sidebar = document.querySelector(".filter-sidebar-pro");
+            if (sidebar) {
+              const topOffset = sidebar.getBoundingClientRect().top + window.scrollY - 80;
+              window.scrollTo({ top: topOffset, behavior: "smooth" });
+            }
+          }}
+          style={{
+            background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+            color: "#ffffff",
+            border: "1.5px solid rgba(255, 255, 255, 0.2)",
+            padding: "10px 18px",
+            borderRadius: "30px",
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.25)",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "0.82rem",
+            fontWeight: "700",
+            letterSpacing: "0.5px",
+            backdropFilter: "blur(10px)",
+            transition: "transform 0.2s ease, boxShadow 0.2s ease"
+          }}
+          title="Jump to Catalog Filters"
+        >
+          <i className="fa-solid fa-sliders" style={{ color: "var(--primary)" }}></i>
+          <span>Filter Catalog</span>
+          {totalActiveFiltersCount > 0 && (
+            <span style={{ background: "var(--primary)", color: "#fff", padding: "2px 7px", borderRadius: "10px", fontSize: "0.72rem" }}>
+              {totalActiveFiltersCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Toast notification wrapper */}
       <div className={`toast toast-success ${showToast ? "show" : ""}`}>

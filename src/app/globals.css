@@ -1211,6 +1211,194 @@ nav {
   top: 100px;
 }
 
+/* Flipkart / Amazon Style Modern E-Commerce Filter Sidebar */
+.filter-sidebar-pro {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem 1rem;
+  height: fit-content;
+  position: sticky;
+  top: 90px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.filter-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.filter-header-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.filter-badge-count {
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.btn-reset-filters {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-filters:hover {
+  background: #fef2f2;
+}
+
+.accordion-group {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 10px 0;
+}
+
+.accordion-group:last-child {
+  border-bottom: none;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+  transition: color 0.2s ease;
+}
+
+.accordion-header:hover {
+  color: var(--primary);
+}
+
+.accordion-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.accordion-arrow {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  transition: transform 0.3s ease;
+}
+
+.accordion-arrow.open {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.accordion-body {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* Filter Checkbox & Radio Item Styling */
+.filter-item-pro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.83rem;
+  color: #334155;
+  cursor: pointer;
+  padding: 5px 8px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.filter-item-pro:hover {
+  background: #f8fafc;
+  color: var(--primary);
+}
+
+.filter-item-pro input[type="checkbox"],
+.filter-item-pro input[type="radio"] {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.filter-count-label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+/* Active Filter Chips Bar */
+.active-chips-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 1.2rem;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.filter-chip button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.filter-chip button:hover {
+  color: #ef4444;
+}
+
 .filter-group {
   margin-bottom: 2rem;
 }
