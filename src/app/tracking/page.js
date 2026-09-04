@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getOrders } from "../db";
 import { generateInvoicePDF } from "../utils/invoiceGenerator";
+import { supabase } from "../../supabase";
 import Link from "next/link";
 
 function TrackingContent() {
@@ -13,23 +14,36 @@ function TrackingContent() {
   const [orderIdInput, setOrderIdInput] = useState(orderIdParam || "");
   const [activeOrder, setActiveOrder] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const locateOrder = (id) => {
-    const orders = getOrders();
-    const match = orders.find(o => o.id.trim().toUpperCase() === id.trim().toUpperCase());
-    
-    if (match) {
-      setActiveOrder(match);
-      setErrorMsg("");
-    } else {
-      setActiveOrder(null);
-      setErrorMsg(`Could not find any order with code ${id}. Verify your order reference.`);
+  const locateOrder = async (id) => {
+    setLoading(true);
+    setActiveOrder(null);
+    setErrorMsg("");
+
+    try {
+      const { data: order, error } = await supabase.from('orders').select('*').eq('order_number', id).single();
+      
+      if (error) {
+        const { data: orderById, error: err2 } = await supabase.from('orders').select('*').eq('id', id).single();
+        if (orderById) {
+          setActiveOrder(orderById);
+        } else {
+          setErrorMsg(`Could not find any order with code ${id}. Verify your order reference.`);
+        }
+      } else if (order) {
+        setActiveOrder(order);
+      } else {
+        setErrorMsg(`Could not find any order with code ${id}. Verify your order reference.`);
+      }
+    } catch (err) {
+      setErrorMsg("An error occurred while tracking. Please try again.");
     }
+    setLoading(false);
   };
 
   useEffect(() => {
     if (orderIdParam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       locateOrder(orderIdParam);
     }
   }, [orderIdParam]);

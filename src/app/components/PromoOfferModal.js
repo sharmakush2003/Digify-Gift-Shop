@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../../supabase";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -28,44 +29,52 @@ export default function PromoOfferModal() {
 
   const isAdminOrDelivery = pathname && (pathname.startsWith('/admin') || pathname.startsWith('/delivery') || pathname.startsWith('/reset-password') || pathname.startsWith('/auth/verify'));
 
-  const loadConfig = () => {
-    try {
-      // Check 7-day dismissal status
-      const hideUntil = localStorage.getItem("orient_hide_promo_popup");
-      if (hideUntil) {
-        const timestamp = parseInt(hideUntil, 10);
-        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-        if (Date.now() - timestamp < SEVEN_DAYS_MS) {
-          return null; // Suppressed by user preference
-        }
-      }
-
-      // Load admin config
-      const saved = localStorage.getItem("orient_promo_popup_config");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.enabled === false) return null;
-        return { ...DEFAULT_CONFIG, ...parsed };
-      }
-      return DEFAULT_CONFIG;
-    } catch (e) {
-      return DEFAULT_CONFIG;
-    }
-  };
-
   useEffect(() => {
     if (isAdminOrDelivery) return;
 
-    const activeConfig = loadConfig();
-    if (!activeConfig) return;
+    // Check 7-day dismissal status
+    const hideUntil = localStorage.getItem("orient_hide_promo_popup");
+    if (hideUntil) {
+      const timestamp = parseInt(hideUntil, 10);
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - timestamp < SEVEN_DAYS_MS) {
+        return; // Suppressed by user preference
+      }
+    }
 
-    setConfig(activeConfig);
+    const fetchConfig = async () => {
+      let activeConfig = DEFAULT_CONFIG;
+      try {
+        const { data, error } = await supabase.from('promo_config').select('*').eq('id', 1).single();
+        if (!error && data) {
+          if (data.enabled === false) return;
+          activeConfig = {
+            ...DEFAULT_CONFIG,
+            enabled: data.enabled ?? true,
+            bannerImageUrl: data.image_url ?? '',
+            ...data.config_json
+          };
+        } else {
+          const saved = localStorage.getItem("orient_promo_popup_config");
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.enabled === false) return;
+            activeConfig = { ...DEFAULT_CONFIG, ...parsed };
+          }
+        }
+      } catch (e) {
+        activeConfig = DEFAULT_CONFIG;
+      }
 
-    const timer = setTimeout(() => {
-      setIsOpen(true);
-    }, (activeConfig.delaySeconds || 1.5) * 1000);
+      setConfig(activeConfig);
+      const timer = setTimeout(() => {
+        setIsOpen(true);
+      }, (activeConfig.delaySeconds || 1.5) * 1000);
 
-    return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
+    };
+
+    fetchConfig();
   }, [isAdminOrDelivery]);
 
   const handleClose = () => {

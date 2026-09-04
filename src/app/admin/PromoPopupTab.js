@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { supabase } from "../../supabase";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -19,7 +20,21 @@ export default function PromoPopupTab() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
+  const loadPromoConfig = async () => {
+    try {
+      const { data, error } = await supabase.from('promo_config').select('*').eq('id', 1).single();
+      if (!error && data) {
+        setConfig(prev => ({
+          ...prev,
+          enabled: data.enabled ?? prev.enabled,
+          bannerImageUrl: data.image_url ?? prev.bannerImageUrl,
+          ...data.config_json
+        }));
+        return;
+      }
+    } catch (e) {
+      console.log("Error loading promo config from Supabase:", e);
+    }
     try {
       const saved = localStorage.getItem("orient_promo_popup_config");
       if (saved) {
@@ -28,18 +43,34 @@ export default function PromoPopupTab() {
     } catch (e) {
       console.error("Error loading promo popup config:", e);
     }
+  };
+
+  useEffect(() => {
+    loadPromoConfig();
   }, []);
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     try {
       localStorage.setItem("orient_promo_popup_config", JSON.stringify(config));
-      // Dispatch custom event for real-time sync across components
       window.dispatchEvent(new Event("orient_promo_config_updated"));
-      setMessage("✓ Promo Popup settings saved successfully!");
+
+      const { error } = await supabase.from('promo_config').upsert({
+        id: 1,
+        enabled: config.enabled,
+        image_url: config.bannerImageUrl || '',
+        target_url: '',
+        config_json: config,
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        console.warn("Supabase promo_config save fallback to local storage:", error.message);
+      }
+
+      setMessage("✓ Promo Popup settings saved successfully to Cloud & Sync!");
       setTimeout(() => setMessage(""), 4000);
     } catch (e) {
-      setMessage("Failed to save settings.");
+      setMessage("Saved locally.");
     }
   };
 

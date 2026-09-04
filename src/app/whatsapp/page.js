@@ -3,6 +3,7 @@
 import './whatsapp.css';
 import { useEffect, useRef } from 'react';
 import { getOrders } from '../db';
+import { supabase } from '../../supabase';
 import Link from 'next/link';
 
 export default function WhatsappPage() {
@@ -96,23 +97,39 @@ export default function WhatsappPage() {
       document.getElementById(id)?.classList.add('highlight');
     };
 
-    // Load initial orders
-    const initialOrders = getOrders();
-    prevOrdersRef.current = initialOrders;
+    const fetchCloudOrders = async () => {
+      try {
+        const { data: dbOrders } = await supabase.from('orders').select('*, order_items(*, products(*))');
+        if (dbOrders) {
+          const currentOrders = dbOrders.map(dbOrder => {
+            const nameFromAddr = typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : null;
+            const custName = nameFromAddr || dbOrder.customer_name || dbOrder.name || (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer');
+            const statusMap = { 'NEW': 'Pending', 'PACKED': 'Packed', 'DISPATCHED': 'Shipped', 'DELIVERED': 'Delivered' };
+            const status = statusMap[dbOrder.order_status] || 'Pending';
+            
+            return {
+              id: dbOrder.order_number || dbOrder.id,
+              customerName: custName,
+              subtotal: dbOrder.total_mrp || dbOrder.final_total || 0,
+              gstAmount: dbOrder.tax_amount || 0,
+              total: dbOrder.final_total || 0,
+              shippingAddress: dbOrder.shipping_address?.raw_text || 'Address',
+              status: status,
+              items: (dbOrder.order_items || []).map(i => ({
+                name: i.products?.name || i.product_name || 'Crockery Item',
+                quantity: i.quantity || 1
+              }))
+            };
+          });
 
-    // Local change listener loop running every 1.5 seconds
-    const intervalId = setInterval(() => {
-      const currentOrders = getOrders();
-      const prevOrders = prevOrdersRef.current;
+          const prevOrders = prevOrdersRef.current;
+          currentOrders.forEach((o) => {
+            const prevMatch = prevOrders.find((po) => po.id === o.id);
 
-      currentOrders.forEach((o) => {
-        const prevMatch = prevOrders.find((po) => po.id === o.id);
-
-        if (!prevMatch) {
-          // A brand new order was checked out!
-          const itemsList = o.items.map(item => `• ${item.name} (x${item.quantity}) [${item.department || item.category || 'Gifts'}]`).join('\n');
-          const text = `*Order Confirmed!* 🎉
-          
+            if (!prevMatch) {
+              const itemsList = o.items.map(item => `• ${item.name} (x${item.quantity})`).join('\n');
+              const text = `*Order Confirmed!* 🎉
+              
 Namaste *${o.customerName}*, we have received your order *${o.id}*.
 
 🛍️ *Order Items:*
@@ -124,54 +141,60 @@ ${itemsList}
 💳 *Payment Mode:* Card / UPI (Paid)
 
 We have registered your details in our ERP database under State GST codes. We are currently bubble-wrapping your fragile treasures! 📦`;
-          
-          appendMsg('received', text);
-          highlightGuide('guide-checkout');
-        } 
-        else if (prevMatch.status !== o.status) {
-          // Status has been updated in ERP dashboard!
-          let msg = "";
-          let hasPdf = false;
-          let pdfName = "";
-          let pdfSize = "";
+              
+              appendMsg('received', text);
+              highlightGuide('guide-checkout');
+            } 
+            else if (prevMatch.status !== o.status) {
+              let msg = "";
+              let hasPdf = false;
+              let pdfName = "";
+              let pdfSize = "";
 
-          if (o.status === "Packed") {
-            msg = `Hi *${o.customerName}*! 📦
-            
+              if (o.status === "Packed") {
+                msg = `Hi *${o.customerName}*! 📦
+                
 Your order *${o.id}* has been successfully packed by our warehouse team. 
 
 Our logistics checklist verified all items, attached fragile protection labels, and scanned barcodes into the master registry database. Ready for dispatch! 🚚`;
-          } 
-          else if (o.status === "Shipped") {
-            msg = `Good news! 🚚 Your order *${o.id}* has been dispatched.
-            
+              } 
+              else if (o.status === "Shipped") {
+                msg = `Good news! 🚚 Your order *${o.id}* has been dispatched.
+                
 *Courier Partner:* BlueDart Express
-*Tracking Airway Bill:* AWB-BD-${o.id.substring(4)}
+*Tracking Airway Bill:* AWB-BD-${String(o.id).substring(4)}
 *Tracking URL:* http://localhost:3000/tracking?orderId=${o.id}
 
 Download your official TAX invoice PDF details attached below. 🧾`;
-            hasPdf = true;
-            pdfName = `TAX_INVOICE_${o.id}.pdf`;
-            pdfSize = `${(120 + Math.random()*40).toFixed(1)} KB`;
-          } 
-          else if (o.status === "Delivered") {
-            msg = `Delivered! 🎉
-            
+                hasPdf = true;
+                pdfName = `TAX_INVOICE_${o.id}.pdf`;
+                pdfSize = `${(120 + Math.random()*40).toFixed(1)} KB`;
+              } 
+              else if (o.status === "Delivered") {
+                msg = `Delivered! 🎉
+                
 Hi *${o.customerName}*, our logistics team confirmed package *${o.id}* has been successfully delivered to your address:
 📍 _${o.shippingAddress}_
 
 Thank you for shopping with *Orient Crockeries*. Please let us know if you would like to order again! 🌸`;
-          }
+              }
 
-          if (msg) {
-            appendMsg('received', msg, hasPdf, pdfName, pdfSize, o.id);
-            highlightGuide('guide-erp');
-          }
+              if (msg) {
+                appendMsg('received', msg, hasPdf, pdfName, pdfSize, o.id);
+                highlightGuide('guide-erp');
+              }
+            }
+          });
+
+          prevOrdersRef.current = currentOrders;
         }
-      });
+      } catch (e) {
+        console.error("Error fetching orders from Supabase in WhatsApp sim:", e);
+      }
+    };
 
-      prevOrdersRef.current = currentOrders;
-    }, 1500);
+    fetchCloudOrders();
+    const intervalId = setInterval(fetchCloudOrders, 3000);
 
     // 3. Abandoned Cart Nudge Simulator
     const checkAbandonedCart = () => {

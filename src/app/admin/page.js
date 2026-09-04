@@ -155,11 +155,19 @@ export default function AdminPage() {
             warrantyVal = warrantyMap[p.id] || warrantyMap[String(p.id)];
           } catch (err) {}
         }
+        let imageSettingsVal = p.image_settings;
+        if ((!imageSettingsVal || Object.keys(imageSettingsVal).length === 0) && typeof window !== 'undefined') {
+          try {
+            const localMap = JSON.parse(localStorage.getItem('orient_image_settings') || '{}');
+            imageSettingsVal = localMap[p.id] || localMap[String(p.id)] || {};
+          } catch (err) {}
+        }
         return {
           ...p,
           warranty: warrantyVal || "No Warranty",
           youtube_url: p.youtube_url || media.youtube_url || '',
-          instagram_url: p.instagram_url || media.instagram_url || ''
+          instagram_url: p.instagram_url || media.instagram_url || '',
+          image_settings: imageSettingsVal || {}
         };
       });
       // Sort products by ID or keep original order
@@ -703,7 +711,8 @@ export default function AdminPage() {
       rating,
       reviewCount: reviews.length,
       youtube_url: editingProduct.youtube_url || '',
-      instagram_url: editingProduct.instagram_url || ''
+      instagram_url: editingProduct.instagram_url || '',
+      image_settings: editingProduct.image_settings || {}
     };
     
     // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
@@ -740,11 +749,8 @@ export default function AdminPage() {
       try {
         let { error } = await supabase.from('products').upsert(updated);
         if (error) {
-          console.warn("Supabase schema mismatch (custom column missing). Retrying with base columns:", error);
+          console.warn("Supabase upsert warning:", error);
           const fallback = { ...updated };
-          delete fallback.image_settings;
-          delete fallback.youtube_url;
-          delete fallback.instagram_url;
           const retryRes = await supabase.from('products').upsert(fallback);
           error = retryRes.error;
         }
