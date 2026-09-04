@@ -7,21 +7,16 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function alterDb() {
   const { error } = await supabase.rpc('execute_sql', {
-    sql_string: "ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_otp TEXT;"
-  });
-  
-  // Create a function to alter orders table to add coupon_id
-  const { error: rpcError2 } = await supabase.rpc('execute_sql', {
     sql_string: `
-      ALTER TABLE public.orders 
-      ADD COLUMN IF NOT EXISTS coupon_id UUID REFERENCES public.coupons(id);
+      ALTER TABLE public.products ADD COLUMN IF NOT EXISTS warranty TEXT DEFAULT '1 Year Brand Warranty';
+      UPDATE public.products SET warranty = '1 Year Brand Warranty' WHERE warranty IS NULL OR warranty = '' OR warranty = 'No Warranty';
     `
   });
 
-  if (error || rpcError2) {
-     console.error("RPC failed:", error?.message || rpcError2?.message);
+  if (error) {
+     console.error("RPC failed:", error?.message);
   } else {
-     console.log("Success");
+     console.log("Successfully added 'warranty' column to Supabase products table!");
   }
 }
 

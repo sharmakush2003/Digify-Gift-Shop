@@ -20,7 +20,7 @@ export const getProducts = () => {
     }
   }
 
-  // Merge warranty local storage map or fallback to default brand warranty
+  // Merge warranty local storage map
   try {
     let warrantyMap = {};
     if (typeof window !== 'undefined') {
@@ -28,18 +28,12 @@ export const getProducts = () => {
         warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
       } catch (e) {}
     }
-    return productsList.map(p => {
-      const w = p.warranty || warrantyMap[p.id] || warrantyMap[String(p.id)];
-      return {
-        ...p,
-        warranty: (!w || w === "No Warranty") ? "1 Year Brand Warranty" : w
-      };
-    });
-  } catch (e) {
     return productsList.map(p => ({
       ...p,
-      warranty: (!p.warranty || p.warranty === "No Warranty") ? "1 Year Brand Warranty" : p.warranty
+      warranty: p.warranty || warrantyMap[p.id] || warrantyMap[String(p.id)] || "No Warranty"
     }));
+  } catch (e) {
+    return productsList;
   }
 };
 

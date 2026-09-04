@@ -718,7 +718,7 @@ export default function AdminPage() {
           localStorage.setItem('orient_image_settings', JSON.stringify(localMap));
         }
 
-        if (updated.warranty) {
+        if (updated.warranty !== undefined) {
           const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
           warrantyMap[updated.id] = updated.warranty;
           warrantyMap[String(updated.id)] = updated.warranty;
@@ -745,8 +745,6 @@ export default function AdminPage() {
           delete fallback.image_settings;
           delete fallback.youtube_url;
           delete fallback.instagram_url;
-          delete fallback.warranty;
-          delete fallback.reviews;
           const retryRes = await supabase.from('products').upsert(fallback);
           error = retryRes.error;
         }
@@ -2587,8 +2585,14 @@ export default function AdminPage() {
                     <select 
                       className="sort-select"
                       style={{ padding: "6px 12px", borderRadius: "6px" }}
-                      value={editingProduct.warranty || "No Warranty"}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, warranty: e.target.value })}
+                      value={(editingProduct.warranty && !["No Warranty", "6 Months Brand Warranty", "1 Year Brand Warranty", "2 Years Replacement Warranty", "5 Years Orient Guarantee", "Lifetime Craftsmanship Warranty"].includes(editingProduct.warranty)) ? "Custom" : (editingProduct.warranty || "No Warranty")}
+                      onChange={(e) => {
+                        if (e.target.value === "Custom") {
+                          setEditingProduct({ ...editingProduct, warranty: "" });
+                        } else {
+                          setEditingProduct({ ...editingProduct, warranty: e.target.value });
+                        }
+                      }}
                     >
                       <option value="No Warranty">No Warranty</option>
                       <option value="6 Months Brand Warranty">6 Months Brand Warranty</option>
@@ -2596,7 +2600,17 @@ export default function AdminPage() {
                       <option value="2 Years Replacement Warranty">2 Years Replacement Warranty</option>
                       <option value="5 Years Orient Guarantee">5 Years Orient Guarantee</option>
                       <option value="Lifetime Craftsmanship Warranty">Lifetime Craftsmanship Warranty</option>
+                      <option value="Custom">Custom</option>
                     </select>
+                    {(editingProduct.warranty !== undefined && !["No Warranty", "6 Months Brand Warranty", "1 Year Brand Warranty", "2 Years Replacement Warranty", "5 Years Orient Guarantee", "Lifetime Craftsmanship Warranty"].includes(editingProduct.warranty)) && (
+                      <input 
+                        type="text"
+                        value={editingProduct.warranty}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, warranty: e.target.value })}
+                        placeholder="e.g. 3 Months Warranty"
+                        style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", width: "180px" }}
+                      />
+                    )}
                   </div>
                 </div>
 
