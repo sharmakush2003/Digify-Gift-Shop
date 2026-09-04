@@ -410,36 +410,8 @@ export default function AdminPage() {
         image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg'
       };
 
-      if (typeof window !== 'undefined' && id) {
-        try {
-          const mediaMap = JSON.parse(localStorage.getItem('orient_product_media_urls') || '{}');
-          const mediaObj = {
-            youtube_url: newProduct.youtube_url || '',
-            instagram_url: newProduct.instagram_url || ''
-          };
-          mediaMap[id] = mediaObj;
-          mediaMap[String(id)] = mediaObj;
-          localStorage.setItem('orient_product_media_urls', JSON.stringify(mediaMap));
-        } catch (e) {}
-      }
-
-      let insertErr = null;
-      try {
-        const { error } = await supabase.from('products').insert(newProductRecord);
-        insertErr = error;
-      } catch (err) {
-        insertErr = err;
-      }
-
-      if (insertErr && (insertErr.code === 'PGRST204' || (insertErr.message && (insertErr.message.includes('youtube_url') || insertErr.message.includes('instagram_url'))))) {
-        const fallbackRecord = { ...newProductRecord };
-        delete fallbackRecord.youtube_url;
-        delete fallbackRecord.instagram_url;
-        const { error: retryError } = await supabase.from('products').insert(fallbackRecord);
-        if (retryError) throw retryError;
-      } else if (insertErr) {
-        throw insertErr;
-      }
+      const { error: insertErr } = await supabase.from('products').insert(newProductRecord);
+      if (insertErr) throw insertErr;
 
       triggerToast("Product added successfully!");
       setShowAddProductModal(false);
@@ -718,42 +690,9 @@ export default function AdminPage() {
     // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
     delete updated.stockStatus;
 
-    // Persist local backup of warranty, image_settings & media URLs
-    if (typeof window !== 'undefined' && updated.id) {
-      try {
-        if (updated.image_settings) {
-          const localMap = JSON.parse(localStorage.getItem('orient_image_settings') || '{}');
-          localMap[updated.id] = updated.image_settings;
-          localStorage.setItem('orient_image_settings', JSON.stringify(localMap));
-        }
-
-        if (updated.warranty !== undefined) {
-          const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
-          warrantyMap[updated.id] = updated.warranty;
-          warrantyMap[String(updated.id)] = updated.warranty;
-          localStorage.setItem('orient_product_warranties', JSON.stringify(warrantyMap));
-        }
-
-        const mediaMap = JSON.parse(localStorage.getItem('orient_product_media_urls') || '{}');
-        const mediaObj = {
-          youtube_url: updated.youtube_url || '',
-          instagram_url: updated.instagram_url || ''
-        };
-        mediaMap[updated.id] = mediaObj;
-        mediaMap[String(updated.id)] = mediaObj;
-        localStorage.setItem('orient_product_media_urls', JSON.stringify(mediaMap));
-      } catch (e) {}
-    }
-
     const updateProductInSupabase = async () => {
       try {
-        let { error } = await supabase.from('products').upsert(updated);
-        if (error) {
-          console.warn("Supabase upsert warning:", error);
-          const fallback = { ...updated };
-          const retryRes = await supabase.from('products').upsert(fallback);
-          error = retryRes.error;
-        }
+        const { error } = await supabase.from('products').upsert(updated);
         if (error) throw error;
         loadDbData();
         setEditingProduct(null);
