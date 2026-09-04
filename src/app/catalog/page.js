@@ -34,13 +34,13 @@ function CatalogContent() {
   const [selectedMicrowave, setSelectedMicrowave] = useState("all");
   const [sortOption, setSortOption] = useState("default");
 
-  // Accordion Open/Closed States
+  // Accordion Open/Closed States (Default to collapsed state for compact page layout)
   const [openSections, setOpenSections] = useState({
-    depts: true,
-    categories: true,
-    brands: true,
-    collections: true,
-    price: true,
+    depts: false,
+    categories: false,
+    brands: false,
+    collections: false,
+    price: false,
     handling: false
   });
 

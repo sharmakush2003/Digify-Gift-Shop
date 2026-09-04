@@ -162,8 +162,12 @@ export default function AdminPage() {
             imageSettingsVal = localMap[p.id] || localMap[String(p.id)] || {};
           } catch (err) {}
         }
+        const rawImages = Array.isArray(p.images) && p.images.length > 0 ? p.images : (p.image && p.image !== '/placeholder.jpg' ? [p.image] : []);
+        const cappedImages = rawImages.slice(0, 5);
         return {
           ...p,
+          images: cappedImages,
+          image: cappedImages.length > 0 ? cappedImages[0] : (p.image || '/placeholder.jpg'),
           warranty: warrantyVal || "No Warranty",
           youtube_url: p.youtube_url || media.youtube_url || '',
           instagram_url: p.instagram_url || media.instagram_url || '',
@@ -380,7 +384,8 @@ export default function AdminPage() {
     try {
       const uploadedImageUrls = [];
       if (singleUploadImages.length > 0) {
-        for (const file of singleUploadImages) {
+        const imagesToUpload = singleUploadImages.slice(0, 5);
+        for (const file of imagesToUpload) {
           const fileExt = file.name.split('.').pop();
           const fileName = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
           const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, file);
@@ -647,10 +652,15 @@ export default function AdminPage() {
     setSingleUploadStatus("Uploading images...");
     
     let uploadedImageUrls = [...(editingProduct.images || [])];
+    if (uploadedImageUrls.length > 5) {
+      uploadedImageUrls = uploadedImageUrls.slice(0, 5);
+    }
     
-    if (singleUploadImages && singleUploadImages.length > 0) {
-      for (let i = 0; i < singleUploadImages.length; i++) {
-        const file = singleUploadImages[i];
+    const availableSlots = 5 - uploadedImageUrls.length;
+    if (singleUploadImages && singleUploadImages.length > 0 && availableSlots > 0) {
+      const filesToUpload = singleUploadImages.slice(0, availableSlots);
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
         const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
         try {
           const compressedFile = await imageCompression(file, options);
@@ -2085,19 +2095,36 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="form-group full-width" style={{ marginTop: "10px" }}>
-                  <span className="form-label">Upload Images</span>
+                  <div style={{ background: "#eff6ff", padding: "8px 12px", borderRadius: "8px", border: "1px solid #bfdbfe", marginBottom: "8px", fontSize: "0.8rem", color: "#1e40af" }}>
+                    <i className="fa-solid fa-circle-info" style={{ marginRight: "6px" }}></i>
+                    <b>Notice:</b> You can add a <b>maximum of 5 images</b> per product.
+                  </div>
+                  <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Upload Product Images (Max 5)</span>
+                    <span style={{ fontSize: "0.75rem", color: singleUploadImages.length > 5 ? "#ef4444" : "#059669", fontWeight: "700" }}>
+                      {singleUploadImages.length}/5 Selected
+                    </span>
+                  </span>
                   <input 
                     type="file" 
                     multiple 
                     accept="image/png, image/jpeg, image/jpg, image/webp"
-                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      if (files.length > 5) {
+                        alert("Maximum 5 images allowed per product. Only the first 5 images will be selected.");
+                        setSingleUploadImages(files.slice(0, 5));
+                      } else {
+                        setSingleUploadImages(files);
+                      }
+                    }}
                     disabled={isSingleUploading}
                     className="form-input"
                     style={{ paddingTop: "6px" }}
                   />
                   {singleUploadImages.length > 0 && (
-                    <p style={{ margin: "5px 0 0 0", fontSize: "0.75rem", color: "var(--primary)" }}>
-                      {singleUploadImages.length} image(s) selected
+                    <p style={{ margin: "5px 0 0 0", fontSize: "0.8rem", color: "#059669", fontWeight: "500" }}>
+                      <i className="fa-solid fa-circle-check"></i> {singleUploadImages.length} image(s) selected (Max 5)
                     </p>
                   )}
                 </div>
@@ -2364,17 +2391,16 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Existing Images Gallery with Reordering Controls */}
                 <div className="form-group full-width">
                   <div style={{ background: "#e0f2fe", padding: "10px 14px", borderRadius: "10px", border: "1px solid #bae6fd", marginBottom: "12px", fontSize: "0.82rem", color: "#0369a1", lineHeight: "1.4" }}>
                     <i className="fa-solid fa-circle-info" style={{ marginRight: "6px", color: "#0284c7" }}></i>
-                    <b>Main Cover Image Rule:</b> The <b>First Photo (Position #1)</b> will serve as the <b>Main Catalog Display Image</b> across the entire store. Use <code>◀ Left</code> and <code>▶ Right</code> to adjust image sequence.
+                    <b>Main Cover Image Rule:</b> Maximum <b>5 Images</b> allowed per product. Position <b>#1</b> serves as the <b>Main Catalog Display Image</b> across the entire store. Use <code>◀ Left</code> and <code>▶ Right</code> to adjust image sequence.
                   </div>
 
                   <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>Existing Images & Display Sequence</span>
-                    <span style={{ fontSize: "0.75rem", color: "#4318ff", fontWeight: "600", backgroundColor: "#e0e7ff", padding: "3px 10px", borderRadius: "12px" }}>
-                      Click 'Align & Fit' to adjust zoom
+                    <span style={{ fontSize: "0.75rem", color: (editingProduct.images?.length || 0) >= 5 ? "#ef4444" : "#4318ff", fontWeight: "700", backgroundColor: (editingProduct.images?.length || 0) >= 5 ? "#fee2e2" : "#e0e7ff", padding: "3px 10px", borderRadius: "12px" }}>
+                      {Math.min(5, editingProduct.images?.length || (editingProduct.image && editingProduct.image !== '/placeholder.jpg' ? 1 : 0))}/5 Images Used
                     </span>
                   </span>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1.5px solid #cbd5e1" }}>
@@ -2491,18 +2517,42 @@ export default function AdminPage() {
                 </div>
 
                 <div className="form-group full-width">
-                  <span className="form-label">Upload New / Additional Images</span>
+                  <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Upload New / Additional Images (Max 5 Total)</span>
+                    <span style={{ fontSize: "0.75rem", color: (editingProduct.images?.length || 0) >= 5 ? "#ef4444" : "#059669", fontWeight: "700" }}>
+                      {(editingProduct.images?.length || 0)}/5 Used
+                    </span>
+                  </span>
                   <input 
                     type="file" 
                     multiple 
                     accept="image/png, image/jpeg, image/jpg, image/webp"
-                    onChange={(e) => setSingleUploadImages(Array.from(e.target.files))}
-                    disabled={isSingleUploading}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      const currentCount = editingProduct.images?.length || 0;
+                      const availableSlots = 5 - currentCount;
+                      if (availableSlots <= 0) {
+                        alert("Maximum limit of 5 images per product reached! Remove an existing image first to upload new ones.");
+                        setSingleUploadImages([]);
+                        return;
+                      }
+                      if (files.length > availableSlots) {
+                        alert(`Maximum 5 images allowed per product. Only the first ${availableSlots} selected image(s) will be uploaded.`);
+                        setSingleUploadImages(files.slice(0, availableSlots));
+                      } else {
+                        setSingleUploadImages(files);
+                      }
+                    }}
+                    disabled={isSingleUploading || (editingProduct.images?.length || 0) >= 5}
                     className="form-input"
                   />
-                  {singleUploadImages.length > 0 && (
+                  {(editingProduct.images?.length || 0) >= 5 ? (
+                    <p style={{ margin: "6px 0 0 0", fontSize: "0.8rem", color: "#ef4444", fontWeight: "600" }}>
+                      <i className="fa-solid fa-circle-exclamation"></i> Maximum 5 images limit reached. Remove an existing image to upload new ones.
+                    </p>
+                  ) : singleUploadImages.length > 0 && (
                     <p style={{ margin: "6px 0 0 0", fontSize: "0.8rem", color: "#059669", fontWeight: "500" }}>
-                      <i className="fa-solid fa-circle-check"></i> {singleUploadImages.length} new image(s) ready to insert
+                      <i className="fa-solid fa-circle-check"></i> {singleUploadImages.length} new image(s) ready to insert (Total will be {((editingProduct.images?.length || 0) + singleUploadImages.length)}/5)
                     </p>
                   )}
                 </div>
