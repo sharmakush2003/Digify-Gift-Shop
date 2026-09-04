@@ -48,15 +48,18 @@ export function AppProvider({ children }) {
           const merged = data.map(p => {
             const media = getProductMediaUrls(p);
             let warrantyVal = p.warranty;
-            if (!warrantyVal && typeof window !== 'undefined') {
+            if ((!warrantyVal || warrantyVal === "No Warranty") && typeof window !== 'undefined') {
               try {
                 const warrantyMap = JSON.parse(localStorage.getItem('orient_product_warranties') || '{}');
                 warrantyVal = warrantyMap[p.id] || warrantyMap[String(p.id)];
               } catch (err) {}
             }
+            if (!warrantyVal || warrantyVal === "No Warranty") {
+              warrantyVal = "1 Year Brand Warranty";
+            }
             return {
               ...p,
-              warranty: warrantyVal || "No Warranty",
+              warranty: warrantyVal,
               youtube_url: p.youtube_url || media.youtube_url || '',
               instagram_url: p.instagram_url || media.instagram_url || ''
             };
