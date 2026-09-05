@@ -20,7 +20,8 @@ export function AuthProvider({ children }) {
     try {
       // 1. Ensure user row exists in public.users to satisfy FK constraint
       try {
-        await supabase.from('users').upsert({ id: u.id, role: 'customer' }, { onConflict: 'id' });
+        // Use insert instead of upsert so we don't overwrite existing roles (e.g. 'admin' back to 'customer')
+        await supabase.from('users').insert({ id: u.id, role: 'customer' });
       } catch (e) {}
 
       // 2. Upsert into customers table
@@ -85,26 +86,17 @@ export function AuthProvider({ children }) {
     const cleanEmail = email ? email.trim().toLowerCase() : '';
     const formattedPhone = phone ? (phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`) : '';
     
-    // 1. Check if Email already exists in customers table (case-insensitive)
-    if (cleanEmail) {
-      const { data: existingEmail } = await supabase
-        .from('customers')
-        .select('id')
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-      if (existingEmail) {
+    // Use RPC to check for duplicate email/phone securely
+    const { data: checkData, error: checkError } = await supabase.rpc('check_user_exists', {
+      p_email: cleanEmail,
+      p_phone: formattedPhone
+    });
+
+    if (!checkError && checkData && checkData.length > 0) {
+      if (checkData[0].email_exists) {
         throw new Error('This Email Address is already registered. Please log in to your existing account.');
       }
-    }
-
-    // 2. Check if Mobile Number already exists in customers table
-    if (formattedPhone) {
-      const { data: existingPhone } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('phone_number', formattedPhone)
-        .maybeSingle();
-      if (existingPhone) {
+      if (checkData[0].phone_exists) {
         throw new Error('This Mobile Number is already registered. Please log in to your existing account.');
       }
     }
@@ -133,10 +125,10 @@ export function AuthProvider({ children }) {
       
       // Sync user profile to database table
       try {
-        await supabase.from('users').upsert({
+        await supabase.from('users').insert({
           id: data.user.id,
           role: 'customer'
-        }, { onConflict: 'id' });
+        });
       } catch (e) {}
 
       // Sync user to customers table
@@ -185,10 +177,10 @@ export function AuthProvider({ children }) {
         
         // Sync to database
         try {
-          await supabase.from('users').upsert({
+          await supabase.from('users').insert({
             id: data.user.id,
             role: 'customer'
-          }, { onConflict: 'id' });
+          });
         } catch (e) {}
 
         // Sync to customers table
@@ -233,10 +225,10 @@ export function AuthProvider({ children }) {
 
       // Attempt sync to database (catch foreign key errors safely if auth.users constraint exists)
       try {
-        await supabase.from('users').upsert({
+        await supabase.from('users').insert({
           id: demoUser.id,
           role: 'customer'
-        }, { onConflict: 'id' });
+        });
       } catch (e) {}
 
       try {

@@ -83,49 +83,43 @@ export function AppProvider({ children }) {
           if (data && data.wishlist) {
             setWishlist(data.wishlist);
           }
+          // Fetch all orders from Supabase for this user (RLS will handle security)
+          const cleanPhone = user.phone || user.user_metadata?.phone || '';
+          const formattedPhone = cleanPhone ? (cleanPhone.startsWith('+') ? cleanPhone : `+91${cleanPhone.replace(/\D/g, '').slice(-10)}`) : '';
           
-          // Fetch all orders from Supabase & LocalStorage for this user
-          const { data: dbOrders } = await supabase.from('orders').select('*');
-          const localOrders = getOrders() || [];
-          
+          const filterConditions = [];
+          if (user.id) filterConditions.push(`customer_id.eq.${user.id}`);
+          if (user.email) filterConditions.push(`guest_email.eq.${user.email}`);
+          if (formattedPhone) filterConditions.push(`guest_phone.eq.${formattedPhone}`);
+
           let combinedOrders = [];
-          
-          if (dbOrders && dbOrders.length > 0) {
-            // Filter DB orders matching user's email (case insensitive) or phone
-            const userDbOrders = dbOrders.filter(dbOrder => {
-              const emailMatch = dbOrder.guest_email && user.email && 
-                dbOrder.guest_email.trim().toLowerCase() === user.email.trim().toLowerCase();
-              const phoneMatch = dbOrder.guest_phone && (user.phoneNumber || user.email) && 
-                (user.email.includes(dbOrder.guest_phone) || (user.phoneNumber && user.phoneNumber.includes(dbOrder.guest_phone)));
-              const isLocalMatch = localOrders.some(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id);
-              return emailMatch || phoneMatch || isLocalMatch;
-            });
 
-            combinedOrders = userDbOrders.map(dbOrder => {
-              const matchedLocal = localOrders.find(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id);
-              return {
-                id: dbOrder.order_number || dbOrder.id,
-                date: dbOrder.created_at,
-                customerName: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer'),
-                customerEmail: dbOrder.guest_email || user.email,
-                customerPhone: dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : 'N/A'),
-                shippingAddress: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.raw_text : (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
-                total: dbOrder.final_total || 0,
-                subtotal: dbOrder.total_mrp || dbOrder.final_total || 0,
-                shippingFee: dbOrder.shipping_charge || 0,
-                promoDiscount: dbOrder.discount_amount || 0,
-                items: matchedLocal && matchedLocal.items ? matchedLocal.items : [],
-                status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
-              };
-            });
-          }
-
-          // Add any local orders that match user's email or phone or are in local storage
-          localOrders.forEach(lo => {
-            if (!combinedOrders.some(co => co.id === lo.id)) {
-              combinedOrders.push(lo);
+          if (filterConditions.length > 0) {
+            const { data: dbOrders } = await supabase.from('orders').select('*').or(filterConditions.join(','));
+            
+            if (dbOrders && dbOrders.length > 0) {
+              combinedOrders = dbOrders.map(dbOrder => {
+                return {
+                  id: dbOrder.order_number || dbOrder.id,
+                  date: dbOrder.created_at,
+                  customerName: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer'),
+                  customerEmail: dbOrder.guest_email || user.email,
+                  customerPhone: dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : 'N/A'),
+                  shippingAddress: typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.raw_text : (typeof dbOrder.shipping_address === 'string' ? dbOrder.shipping_address : 'N/A'),
+                  total: dbOrder.final_total || 0,
+                  subtotal: dbOrder.total_mrp || dbOrder.final_total || 0,
+                  shippingFee: dbOrder.shipping_charge || 0,
+                  promoDiscount: dbOrder.discount_amount || 0,
+                  items: dbOrder.order_items ? dbOrder.order_items.map(i => ({
+                    name: i.products?.name || i.product_name || `Orient Premium Crockery SKU #${i.product_id}`,
+                    quantity: i.quantity || i.qty || 1,
+                    price: i.price_at_time || (i.total_price / (i.quantity || 1)) || 0
+                  })) : (dbOrder.items || []), // Use DB items directly
+                  status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
+                };
+              });
             }
-          });
+          }
 
           combinedOrders.sort((a,b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
           setOrders(combinedOrders);
