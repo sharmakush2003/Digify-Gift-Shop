@@ -145,7 +145,10 @@ export default function AdminPage() {
     description: "",
     fragile: false,
     microwave: false,
-    category: "General"
+    category: "General",
+    video_enabled: false,
+    youtube_url: "",
+    instagram_url: ""
   });
 
   // Single Upload & Custom Department/Category states
@@ -435,8 +438,9 @@ export default function AdminPage() {
         description: newProduct.description,
         fragile: newProduct.fragile,
         microwave: newProduct.microwave,
-        youtube_url: newProduct.youtube_url || '',
-        instagram_url: newProduct.instagram_url || '',
+        video_enabled: Boolean(newProduct.video_enabled),
+        youtube_url: newProduct.video_enabled ? (newProduct.youtube_url || '') : '',
+        instagram_url: newProduct.video_enabled ? (newProduct.instagram_url || '') : '',
         image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg',
         images: uploadedImageUrls.length > 0 ? uploadedImageUrls : ['/placeholder.jpg']
       };
@@ -780,8 +784,9 @@ export default function AdminPage() {
       gst: parseFloat(editingProduct.gst) || 18,
       rating,
       reviewCount: reviews.length,
-      youtube_url: editingProduct.youtube_url || '',
-      instagram_url: editingProduct.instagram_url || '',
+      video_enabled: Boolean(editingProduct.video_enabled),
+      youtube_url: editingProduct.video_enabled ? (editingProduct.youtube_url || '') : '',
+      instagram_url: editingProduct.video_enabled ? (editingProduct.instagram_url || '') : '',
       image_settings: editingProduct.image_settings || {}
     };
     
@@ -2804,41 +2809,81 @@ export default function AdminPage() {
                 </div>
 
                 {/* Product Social Reel & Video Links Box */}
-                <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1", marginTop: "10px" }}>
-                  <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <i className="fa-solid fa-video" style={{ color: "#2563eb" }}></i> Product Video & Reel Showcase (Optional)
-                  </h4>
+                {/* Product Video / Reel Showcase with ON/OFF Toggle Switch */}
+                <div className="form-group full-width" style={{ 
+                  background: newProduct.video_enabled ? "linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)" : "#f8fafc", 
+                  padding: "1rem", 
+                  borderRadius: "12px", 
+                  border: newProduct.video_enabled ? "1.5px solid #3b82f6" : "1.5px solid #cbd5e1", 
+                  marginTop: "10px",
+                  transition: "all 0.2s ease"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "10px" }}>
+                    <h4 style={{ margin: 0, fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <i className="fa-solid fa-video" style={{ color: newProduct.video_enabled ? "#2563eb" : "#94a3b8" }}></i> 
+                      <span>Product Video & Reel Showcase</span>
+                    </h4>
+
+                    {/* Toggle Switch */}
+                    <label style={{ 
+                      display: "inline-flex", 
+                      alignItems: "center", 
+                      gap: "8px", 
+                      cursor: "pointer", 
+                      fontSize: "0.78rem", 
+                      fontWeight: "800", 
+                      backgroundColor: newProduct.video_enabled ? "#dbeafe" : "#f1f5f9",
+                      color: newProduct.video_enabled ? "#1d4ed8" : "#64748b",
+                      padding: "4px 12px",
+                      borderRadius: "20px",
+                      border: newProduct.video_enabled ? "1px solid #93c5fd" : "1px solid #cbd5e1",
+                      userSelect: "none"
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={Boolean(newProduct.video_enabled)}
+                        onChange={(e) => setNewProduct({ ...newProduct, video_enabled: e.target.checked })}
+                        style={{ accentColor: "#2563eb", width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      <span>{newProduct.video_enabled ? "SHOWCASE ENABLED (ON)" : "DISABLED (OFF)"}</span>
+                    </label>
+                  </div>
+
                   <p style={{ margin: "0 0 12px 0", fontSize: "0.78rem", color: "#64748b" }}>
-                    Add Instagram Reel or YouTube Video links to showcase live product demos directly inside the customer modal.
+                    {newProduct.video_enabled 
+                      ? "Paste live Instagram Reel or YouTube Video link to display video player in customer modal." 
+                      : "Video demo is currently turned OFF. Toggle ON if you wish to attach a video demo."}
                   </p>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div className="form-group">
-                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
-                        <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
-                      </span>
-                      <input 
-                        type="url" 
-                        className="form-input" 
-                        placeholder="https://www.instagram.com/reel/..."
-                        value={newProduct.instagram_url || ""}
-                        onChange={(e) => setNewProduct({ ...newProduct, instagram_url: e.target.value })}
-                      />
-                    </div>
+                  {newProduct.video_enabled && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div className="form-group">
+                        <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                          <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
+                        </span>
+                        <input 
+                          type="url" 
+                          className="form-input" 
+                          placeholder="https://www.instagram.com/reel/..."
+                          value={newProduct.instagram_url || ""}
+                          onChange={(e) => setNewProduct({ ...newProduct, instagram_url: e.target.value })}
+                        />
+                      </div>
 
-                    <div className="form-group">
-                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
-                        <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
-                      </span>
-                      <input 
-                        type="url" 
-                        className="form-input" 
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        value={newProduct.youtube_url || ""}
-                        onChange={(e) => setNewProduct({ ...newProduct, youtube_url: e.target.value })}
-                      />
+                      <div className="form-group">
+                        <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                          <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
+                        </span>
+                        <input 
+                          type="url" 
+                          className="form-input" 
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          value={newProduct.youtube_url || ""}
+                          onChange={(e) => setNewProduct({ ...newProduct, youtube_url: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -3281,42 +3326,80 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Product Social Reel & Video Links Box */}
-                <div className="form-group full-width" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1.5px solid #cbd5e1" }}>
-                  <h4 style={{ margin: "0 0 6px 0", fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <i className="fa-solid fa-video" style={{ color: "#2563eb" }}></i> Product Video & Reel Showcase (Optional)
-                  </h4>
+                {/* Product Video / Reel Showcase with ON/OFF Toggle Switch */}
+                <div className="form-group full-width" style={{ 
+                  background: editingProduct.video_enabled ? "linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%)" : "#f8fafc", 
+                  padding: "1rem", 
+                  borderRadius: "12px", 
+                  border: editingProduct.video_enabled ? "1.5px solid #3b82f6" : "1.5px solid #cbd5e1",
+                  transition: "all 0.2s ease"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "10px" }}>
+                    <h4 style={{ margin: 0, fontSize: "0.95rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <i className="fa-solid fa-video" style={{ color: editingProduct.video_enabled ? "#2563eb" : "#94a3b8" }}></i> 
+                      <span>Product Video & Reel Showcase</span>
+                    </h4>
+
+                    {/* Toggle Switch */}
+                    <label style={{ 
+                      display: "inline-flex", 
+                      alignItems: "center", 
+                      gap: "8px", 
+                      cursor: "pointer", 
+                      fontSize: "0.78rem", 
+                      fontWeight: "800", 
+                      backgroundColor: editingProduct.video_enabled ? "#dbeafe" : "#f1f5f9",
+                      color: editingProduct.video_enabled ? "#1d4ed8" : "#64748b",
+                      padding: "4px 12px",
+                      borderRadius: "20px",
+                      border: editingProduct.video_enabled ? "1px solid #93c5fd" : "1px solid #cbd5e1",
+                      userSelect: "none"
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={Boolean(editingProduct.video_enabled)}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, video_enabled: e.target.checked })}
+                        style={{ accentColor: "#2563eb", width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      <span>{editingProduct.video_enabled ? "SHOWCASE ENABLED (ON)" : "DISABLED (OFF)"}</span>
+                    </label>
+                  </div>
+
                   <p style={{ margin: "0 0 12px 0", fontSize: "0.78rem", color: "#64748b" }}>
-                    Add Instagram Reel or YouTube Video links to showcase live product demos directly inside the customer modal.
+                    {editingProduct.video_enabled 
+                      ? "Paste live Instagram Reel or YouTube Video link to display video player in customer modal." 
+                      : "Video demo is currently turned OFF. Toggle ON if you wish to attach a video demo."}
                   </p>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                    <div className="form-group">
-                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
-                        <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
-                      </span>
-                      <input 
-                        type="url" 
-                        className="form-input" 
-                        placeholder="https://www.instagram.com/reel/..."
-                        value={editingProduct.instagram_url || ""}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, instagram_url: e.target.value })}
-                      />
-                    </div>
+                  {editingProduct.video_enabled && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div className="form-group">
+                        <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                          <i className="fa-brands fa-instagram" style={{ color: "#e1306c" }}></i> Instagram Reel / Post URL
+                        </span>
+                        <input 
+                          type="url" 
+                          className="form-input" 
+                          placeholder="https://www.instagram.com/reel/..."
+                          value={editingProduct.instagram_url || ""}
+                          onChange={(e) => setEditingProduct({ ...editingProduct, instagram_url: e.target.value })}
+                        />
+                      </div>
 
-                    <div className="form-group">
-                      <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
-                        <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
-                      </span>
-                      <input 
-                        type="url" 
-                        className="form-input" 
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        value={editingProduct.youtube_url || ""}
-                        onChange={(e) => setEditingProduct({ ...editingProduct, youtube_url: e.target.value })}
-                      />
+                      <div className="form-group">
+                        <span className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem" }}>
+                          <i className="fa-brands fa-youtube" style={{ color: "#ff0000" }}></i> YouTube Video / Shorts URL
+                        </span>
+                        <input 
+                          type="url" 
+                          className="form-input" 
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          value={editingProduct.youtube_url || ""}
+                          onChange={(e) => setEditingProduct({ ...editingProduct, youtube_url: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Customer Reviews Management Box */}

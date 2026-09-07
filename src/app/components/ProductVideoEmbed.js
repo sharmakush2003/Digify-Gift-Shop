@@ -49,6 +49,10 @@ export default function ProductVideoEmbed({ product }) {
 
   const isYtShort = finalYtUrl.includes('/shorts/');
 
+  if (product.video_enabled === false || (!finalYtUrl && !finalIgUrl)) {
+    return null;
+  }
+
   return (
     <div className="product-video-embed-section">
       {/* YouTube Embedded Video Player */}

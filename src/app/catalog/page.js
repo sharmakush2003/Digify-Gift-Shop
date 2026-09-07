@@ -34,6 +34,15 @@ function CatalogContent() {
   const [selectedMicrowave, setSelectedMicrowave] = useState("all");
   const [sortOption, setSortOption] = useState("default");
 
+  // Master Accordion Filter Header State (Collapsed by default so it stays as a single clean line)
+  const [masterFiltersOpen, setMasterFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      setMasterFiltersOpen(true);
+    }
+  }, []);
+
   // Accordion Open/Closed States (Default to collapsed state for compact page layout)
   const [openSections, setOpenSections] = useState({
     depts: false,
@@ -280,202 +289,222 @@ function CatalogContent() {
             </div>
           )}
 
-          {/* Filter Header Bar */}
-          <div className="filter-header-bar">
-            <h3 className="filter-header-title">
-              <i className="fa-solid fa-sliders" style={{ color: "var(--primary)" }}></i> Filters
-              {totalActiveFiltersCount > 0 && <span className="filter-badge-count">{totalActiveFiltersCount}</span>}
-            </h3>
-            {totalActiveFiltersCount > 0 && (
-              <button onClick={handleResetFilters} className="btn-reset-filters">Clear All</button>
-            )}
+          {/* Master Filter Header Bar */}
+          <div 
+            className="filter-header-bar"
+            onClick={() => setMasterFiltersOpen(!masterFiltersOpen)}
+            style={{ cursor: "pointer", userSelect: "none" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <h3 className="filter-header-title">
+                <i className="fa-solid fa-sliders" style={{ color: "var(--primary)" }}></i> Filters
+                {totalActiveFiltersCount > 0 && <span className="filter-badge-count">{totalActiveFiltersCount}</span>}
+              </h3>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {totalActiveFiltersCount > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleResetFilters(); }} 
+                  className="btn-reset-filters"
+                >
+                  Clear All
+                </button>
+              )}
+              <i className={`fa-solid fa-chevron-down accordion-arrow ${masterFiltersOpen ? "open" : ""}`}></i>
+            </div>
           </div>
 
-          {/* 1. Departments Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("depts")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-layer-group" style={{ color: "#64748b" }}></i> Departments
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.depts ? "open" : ""}`}></i>
-            </div>
-            {openSections.depts && (
-              <div className="accordion-body">
-                {departments.map(dept => {
-                  const count = products.filter(p => p.department === dept).length;
-                  return (
-                    <label key={dept} className="filter-item-pro">
+          {/* Collapsible Sub-Filter Groups Container */}
+          {masterFiltersOpen && (
+            <div className="filter-groups-wrapper" style={{ animation: "fadeIn 0.25s ease" }}>
+              {/* 1. Departments Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("depts")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-layer-group" style={{ color: "#64748b" }}></i> Departments
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.depts ? "open" : ""}`}></i>
+                </div>
+                {openSections.depts && (
+                  <div className="accordion-body">
+                    {departments.map(dept => {
+                      const count = products.filter(p => p.department === dept).length;
+                      return (
+                        <label key={dept} className="filter-item-pro">
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedDepts.includes(dept)}
+                              onChange={() => handleDeptToggle(dept)}
+                            />
+                            <span>{dept}</span>
+                          </div>
+                          <span className="filter-count-label">({count})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Shop by Category Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("categories")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-tags" style={{ color: "#0284c7" }}></i> Shop by Category
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.categories ? "open" : ""}`}></i>
+                </div>
+                {openSections.categories && (
+                  <div className="accordion-body">
+                    {categories.map(cat => {
+                      const count = products.filter(p => p.category === cat).length;
+                      return (
+                        <label key={cat} className="filter-item-pro">
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedCategories.includes(cat)}
+                              onChange={() => handleCategoryToggle(cat)}
+                            />
+                            <span>{cat}</span>
+                          </div>
+                          <span className="filter-count-label">({count})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Shop by Brand Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("brands")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-crown" style={{ color: "#d97706" }}></i> Shop by Brand
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.brands ? "open" : ""}`}></i>
+                </div>
+                {openSections.brands && (
+                  <div className="accordion-body">
+                    {availableBrands.map(b => (
+                      <label key={b} className="filter-item-pro">
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedBrands.includes(b)}
+                            onChange={() => handleBrandToggle(b)}
+                          />
+                          <span>{b}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Shop by Collection Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("collections")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-gem" style={{ color: "#9333ea" }}></i> Shop by Collection
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.collections ? "open" : ""}`}></i>
+                </div>
+                {openSections.collections && (
+                  <div className="accordion-body">
+                    {availableCollections.map(col => (
+                      <label key={col} className="filter-item-pro">
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedCollections.includes(col)}
+                            onChange={() => handleCollectionToggle(col)}
+                          />
+                          <span>{col}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Price Range Filter Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("price")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-indian-rupee-sign" style={{ color: "#16a34a" }}></i> Price Range
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.price ? "open" : ""}`}></i>
+                </div>
+                {openSections.price && (
+                  <div className="accordion-body">
+                    {[
+                      { label: "All Prices", value: "all" },
+                      { label: "Under ₹999", value: "under999" },
+                      { label: "₹1,000 - ₹2,499", value: "1000-2499" },
+                      { label: "₹2,500 - ₹4,999", value: "2500-4999" },
+                      { label: "₹5,000 & Above", value: "5000+" }
+                    ].map(pr => (
+                      <label key={pr.value} className="filter-item-pro">
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <input 
+                            type="radio" 
+                            name="priceRangeRadio" 
+                            checked={priceRange === pr.value}
+                            onChange={() => handlePriceRangeChange(pr.value)}
+                          />
+                          <span>{pr.label}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 6. Material Handling & Safety Accordion */}
+              <div className="accordion-group">
+                <div className="accordion-header" onClick={() => toggleSection("handling")}>
+                  <h4 className="accordion-title">
+                    <i className="fa-solid fa-shield-halved" style={{ color: "#ea580c" }}></i> Material & Safety
+                  </h4>
+                  <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.handling ? "open" : ""}`}></i>
+                </div>
+                {openSections.handling && (
+                  <div className="accordion-body">
+                    <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "4px" }}>Fragility</span>
+                    <label className="filter-item-pro">
                       <div style={{ display: "flex", alignItems: "center" }}>
-                        <input 
-                          type="checkbox" 
-                          checked={selectedDepts.includes(dept)}
-                          onChange={() => handleDeptToggle(dept)}
-                        />
-                        <span>{dept}</span>
+                        <input type="radio" name="fragile" checked={selectedFragile === "all"} onChange={() => handleFragileChange("all")} />
+                        <span>All Items</span>
                       </div>
-                      <span className="filter-count-label">({count})</span>
                     </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 2. Shop by Category Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("categories")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-tags" style={{ color: "#0284c7" }}></i> Shop by Category
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.categories ? "open" : ""}`}></i>
-            </div>
-            {openSections.categories && (
-              <div className="accordion-body">
-                {categories.map(cat => {
-                  const count = products.filter(p => p.category === cat).length;
-                  return (
-                    <label key={cat} className="filter-item-pro">
+                    <label className="filter-item-pro">
                       <div style={{ display: "flex", alignItems: "center" }}>
-                        <input 
-                          type="checkbox" 
-                          checked={selectedCategories.includes(cat)}
-                          onChange={() => handleCategoryToggle(cat)}
-                        />
-                        <span>{cat}</span>
+                        <input type="radio" name="fragile" checked={selectedFragile === "fragile"} onChange={() => handleFragileChange("fragile")} />
+                        <span>Fragile Handling</span>
                       </div>
-                      <span className="filter-count-label">({count})</span>
                     </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* 3. Shop by Brand Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("brands")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-[#d97706] fa-crown" style={{ color: "#d97706" }}></i> Shop by Brand
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.brands ? "open" : ""}`}></i>
-            </div>
-            {openSections.brands && (
-              <div className="accordion-body">
-                {availableBrands.map(b => (
-                  <label key={b} className="filter-item-pro">
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedBrands.includes(b)}
-                        onChange={() => handleBrandToggle(b)}
-                      />
-                      <span>{b}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 4. Shop by Collection Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("collections")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-gem" style={{ color: "#9333ea" }}></i> Shop by Collection
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.collections ? "open" : ""}`}></i>
-            </div>
-            {openSections.collections && (
-              <div className="accordion-body">
-                {availableCollections.map(col => (
-                  <label key={col} className="filter-item-pro">
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedCollections.includes(col)}
-                        onChange={() => handleCollectionToggle(col)}
-                      />
-                      <span>{col}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 5. Price Range Filter Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("price")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-indian-rupee-sign" style={{ color: "#16a34a" }}></i> Price Range
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.price ? "open" : ""}`}></i>
-            </div>
-            {openSections.price && (
-              <div className="accordion-body">
-                {[
-                  { label: "All Prices", value: "all" },
-                  { label: "Under ₹999", value: "under999" },
-                  { label: "₹1,000 - ₹2,499", value: "1000-2499" },
-                  { label: "₹2,500 - ₹4,999", value: "2500-4999" },
-                  { label: "₹5,000 & Above", value: "5000+" }
-                ].map(pr => (
-                  <label key={pr.value} className="filter-item-pro">
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                      <input 
-                        type="radio" 
-                        name="priceRangeRadio" 
-                        checked={priceRange === pr.value}
-                        onChange={() => handlePriceRangeChange(pr.value)}
-                      />
-                      <span>{pr.label}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 6. Material Handling & Safety Accordion */}
-          <div className="accordion-group">
-            <div className="accordion-header" onClick={() => toggleSection("handling")}>
-              <h4 className="accordion-title">
-                <i className="fa-solid fa-shield-halved" style={{ color: "#ea580c" }}></i> Material & Safety
-              </h4>
-              <i className={`fa-solid fa-chevron-down accordion-arrow ${openSections.handling ? "open" : ""}`}></i>
-            </div>
-            {openSections.handling && (
-              <div className="accordion-body">
-                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "4px" }}>Fragility</span>
-                <label className="filter-item-pro">
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <input type="radio" name="fragile" checked={selectedFragile === "all"} onChange={() => handleFragileChange("all")} />
-                    <span>All Items</span>
+                    <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "8px" }}>Microwave Safety</span>
+                    <label className="filter-item-pro">
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <input type="radio" name="microwave" checked={selectedMicrowave === "all"} onChange={() => handleMicrowaveChange("all")} />
+                        <span>All Items</span>
+                      </div>
+                    </label>
+                    <label className="filter-item-pro">
+                      <div style={{ display: "flex", alignItems: "center" }}>
+                        <input type="radio" name="microwave" checked={selectedMicrowave === "safe"} onChange={() => handleMicrowaveChange("safe")} />
+                        <span>Microwave Safe</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
-                <label className="filter-item-pro">
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <input type="radio" name="fragile" checked={selectedFragile === "fragile"} onChange={() => handleFragileChange("fragile")} />
-                    <span>Fragile Only</span>
-                  </div>
-                </label>
-
-                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#64748b", textTransform: "uppercase", marginTop: "8px" }}>Microwave Safety</span>
-                <label className="filter-item-pro">
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <input type="radio" name="microwave" checked={selectedMicrowave === "all"} onChange={() => handleMicrowaveChange("all")} />
-                    <span>All Items</span>
-                  </div>
-                </label>
-                <label className="filter-item-pro">
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <input type="radio" name="microwave" checked={selectedMicrowave === "safe"} onChange={() => handleMicrowaveChange("safe")} />
-                    <span>Microwave Safe</span>
-                  </div>
-                </label>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
 
         {/* Catalog Main Panel */}
@@ -798,11 +827,14 @@ function CatalogContent() {
         <button 
           type="button"
           onClick={() => {
-            const sidebar = document.querySelector(".filter-sidebar-pro");
-            if (sidebar) {
-              const topOffset = sidebar.getBoundingClientRect().top + window.scrollY - 80;
-              window.scrollTo({ top: topOffset, behavior: "smooth" });
-            }
+            setMasterFiltersOpen(true);
+            setTimeout(() => {
+              const sidebar = document.querySelector(".filter-sidebar-pro");
+              if (sidebar) {
+                const topOffset = sidebar.getBoundingClientRect().top + window.scrollY - 80;
+                window.scrollTo({ top: topOffset, behavior: "smooth" });
+              }
+            }, 50);
           }}
           style={{
             background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",

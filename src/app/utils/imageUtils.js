@@ -54,13 +54,9 @@ export function getProductMediaUrls(product) {
     }
   }
 
-  // Default fallback media links so video demo & reel showcase render live for all visitors on Vercel
-  if (!youtube_url) {
-    youtube_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-  }
-  if (!instagram_url) {
-    instagram_url = "https://www.instagram.com/reel/DC_1234567/";
+  if (product.video_enabled === false) {
+    return { youtube_url: '', instagram_url: '' };
   }
 
-  return { youtube_url, instagram_url };
+  return { youtube_url: youtube_url.trim(), instagram_url: instagram_url.trim() };
 }
