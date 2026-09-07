@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rppakudcmvwlkcxjhnfn.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_AUO4h2oUniw9oE4moZm3kw_HHjziI09';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
 async function verifyAdminSession(request) {
@@ -21,39 +22,48 @@ async function verifyAdminSession(request) {
   });
 
   const { data: userData, error: roleError } = await clientToUse
-    .from('users').select('role').eq('id', user.id).single();
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
   if (roleError || !userData || userData.role !== 'admin') return null;
 
-  return { user, client: clientToUse };
+  return { user, token };
 }
 
 export async function POST(request) {
   try {
     const adminSession = await verifyAdminSession(request);
     if (!adminSession) {
-      return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Unauthorized. Genuine administrator authorization required.' }, { status: 401 });
     }
 
-    const targetClient = adminSession.client;
-    const { id, is_active } = await request.json();
+    const { id } = await request.json();
     if (!id) {
-      return NextResponse.json({ success: false, message: 'Coupon ID is required' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Product ID is required.' }, { status: 400 });
     }
 
-    const { data, error } = await targetClient
-      .from('coupons')
-      .update({ is_active })
-      .eq('id', id)
-      .select();
+    let targetClient = supabaseAdmin;
+    if (!supabaseServiceKey && adminSession.token) {
+      targetClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${adminSession.token}` } }
+      });
+    }
+
+    const { error } = await targetClient
+      .from('products')
+      .delete()
+      .eq('id', id);
 
     if (error) {
-      console.error('Error toggling coupon status:', error);
+      console.error('Database error deleting product:', error);
       return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true });
   } catch (err) {
-    console.error('Server error toggling coupon status:', err);
+    console.error('Server error deleting product:', err);
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }

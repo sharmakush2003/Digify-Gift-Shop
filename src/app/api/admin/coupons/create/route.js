@@ -16,28 +16,33 @@ async function verifyAdminSession(request) {
   const { data: { user }, error } = await supabaseAuthClient.auth.getUser(token);
   if (error || !user) return null;
 
-  const { data: userData, error: roleError } = await supabaseAdmin
+  const clientToUse = supabaseServiceKey ? supabaseAdmin : createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data: userData, error: roleError } = await clientToUse
     .from('users').select('role').eq('id', user.id).single();
   if (roleError || !userData || userData.role !== 'admin') return null;
 
-  return user;
+  return { user, client: clientToUse };
 }
 
 export async function POST(request) {
   try {
-    const adminUser = await verifyAdminSession(request);
-    if (!adminUser) {
+    const adminSession = await verifyAdminSession(request);
+    if (!adminSession) {
       return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
     }
 
+    const targetClient = adminSession.client;
     const payload = await request.json();
 
-    let { data, error } = await supabaseAdmin.from('coupons').insert([payload]).select();
+    let { data, error } = await targetClient.from('coupons').insert([payload]).select();
 
     // If is_additive column doesn't exist in Supabase DB schema, fallback without it
     if (error && error.message.includes('is_additive')) {
       delete payload.is_additive;
-      const res = await supabaseAdmin.from('coupons').insert([payload]).select();
+      const res = await targetClient.from('coupons').insert([payload]).select();
       error = res.error;
       data = res.data;
     }

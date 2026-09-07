@@ -16,21 +16,26 @@ async function verifyAdminSession(request) {
   const { data: { user }, error } = await supabaseAuthClient.auth.getUser(token);
   if (error || !user) return null;
 
-  const { data: userData, error: roleError } = await supabaseAdmin
+  const clientToUse = supabaseServiceKey ? supabaseAdmin : createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data: userData, error: roleError } = await clientToUse
     .from('users').select('role').eq('id', user.id).single();
   if (roleError || !userData || userData.role !== 'admin') return null;
 
-  return user;
+  return { user, client: clientToUse };
 }
 
 export async function POST(request) {
   try {
     // Verify admin session
-    const adminUser = await verifyAdminSession(request);
-    if (!adminUser) {
+    const adminSession = await verifyAdminSession(request);
+    if (!adminSession) {
       return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
     }
 
+    const targetClient = adminSession.client;
     const body = await request.json();
     const { orderId, nextStatus, docId, paymentStatus } = body;
 
@@ -44,7 +49,7 @@ export async function POST(request) {
     let otpGenerated = null;
     let updatedShippingAddress = null;
 
-    let targetQuery = supabaseAdmin.from('orders').select('id, shipping_address');
+    let targetQuery = targetClient.from('orders').select('id, shipping_address');
     if (docId) {
       targetQuery = targetQuery.eq('id', docId);
     } else {
@@ -68,7 +73,7 @@ export async function POST(request) {
     };
     if (updatedShippingAddress) updateData.shipping_address = updatedShippingAddress;
 
-    let updateQuery = supabaseAdmin.from('orders').update(updateData);
+    let updateQuery = targetClient.from('orders').update(updateData);
     if (docId) {
       updateQuery = updateQuery.eq('id', docId);
     } else {

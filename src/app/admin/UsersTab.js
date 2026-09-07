@@ -10,14 +10,40 @@ export default function UsersTab() {
   const fetchUsersAndCustomers = async () => {
     setLoading(true);
     try {
-      // 1. Fetch from customers table
-      const { data: customersData } = await supabase.from('customers').select('*');
-      
-      // 2. Fetch from users table to get all registered users
-      const { data: usersData } = await supabase.from('users').select('*');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      // 3. Fetch from orders table to extract addresses and guest details
-      const { data: ordersData } = await supabase.from('orders').select('*');
+      let customersData = [];
+      let usersData = [];
+      let ordersData = [];
+
+      try {
+        const apiRes = await fetch('/api/admin/users', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
+        const apiJson = await apiRes.json();
+        if (apiJson.success) {
+          customersData = apiJson.customers || [];
+          usersData = apiJson.users || [];
+          ordersData = apiJson.orders || [];
+        } else {
+          throw new Error(apiJson.message);
+        }
+      } catch (apiErr) {
+        // Fallback to direct client query if allowed by RLS
+        const [cRes, uRes, oRes] = await Promise.all([
+          supabase.from('customers').select('*'),
+          supabase.from('users').select('*'),
+          supabase.from('orders').select('*')
+        ]);
+        customersData = cRes.data || [];
+        usersData = uRes.data || [];
+        ordersData = oRes.data || [];
+      }
 
       const userMap = new Map();
 

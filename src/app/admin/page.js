@@ -186,11 +186,17 @@ export default function AdminPage() {
         }
         const rawImages = Array.isArray(p.images) && p.images.length > 0 ? p.images : (p.image && p.image !== '/placeholder.jpg' ? [p.image] : []);
         const cappedImages = rawImages.slice(0, 5);
+        const isVidEnabled = p.video_enabled !== undefined 
+          ? Boolean(p.video_enabled) 
+          : (imageSettingsVal?.video_enabled !== undefined 
+              ? Boolean(imageSettingsVal.video_enabled) 
+              : Boolean(p.youtube_url || p.instagram_url));
         return {
           ...p,
           images: cappedImages,
           image: cappedImages.length > 0 ? cappedImages[0] : (p.image || '/placeholder.jpg'),
           warranty: warrantyVal || "No Warranty",
+          video_enabled: isVidEnabled,
           youtube_url: p.youtube_url || media.youtube_url || '',
           instagram_url: p.instagram_url || media.instagram_url || '',
           image_settings: imageSettingsVal || {}
@@ -456,15 +462,32 @@ export default function AdminPage() {
         fragile: newProduct.fragile,
         microwave: newProduct.microwave,
         search_tags: newProduct.search_tags || '',
-        video_enabled: Boolean(newProduct.video_enabled),
         youtube_url: newProduct.video_enabled ? (newProduct.youtube_url || '') : '',
         instagram_url: newProduct.video_enabled ? (newProduct.instagram_url || '') : '',
+        image_settings: { video_enabled: Boolean(newProduct.video_enabled) },
         image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg',
         images: uploadedImageUrls.length > 0 ? uploadedImageUrls : ['/placeholder.jpg']
       };
 
-      const { error: insertErr } = await supabase.from('products').insert(newProductRecord);
-      if (insertErr) throw insertErr;
+      // Get session token for admin API authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      // Call secure server-side Admin API
+      const apiRes = await fetch('/api/admin/products/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(newProductRecord)
+      });
+      const apiData = await apiRes.json();
+      if (!apiData.success) {
+        // Fallback to client-side insert if allowed by RLS
+        const { error: insertErr } = await supabase.from('products').insert(newProductRecord);
+        if (insertErr) throw new Error(apiData.message || insertErr.message);
+      }
 
       triggerToast("Product added successfully!");
       setShowAddProductModal(false);
@@ -516,8 +539,23 @@ export default function AdminPage() {
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, isLoading: true }));
         try {
-          const { error } = await supabase.from('products').delete().eq('id', productId);
-          if (error) throw error;
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+
+          const apiRes = await fetch('/api/admin/products/delete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ id: productId })
+          });
+          const apiData = await apiRes.json();
+          if (!apiData.success) {
+            const { error } = await supabase.from('products').delete().eq('id', productId);
+            if (error) throw new Error(apiData.message || error.message);
+          }
+
           setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
           triggerToast(`Product #${productId} deleted successfully`, "success");
           loadDbData();
@@ -560,8 +598,14 @@ export default function AdminPage() {
       isLoading: false,
       onConfirm: () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        const isVidEnabled = p.video_enabled !== undefined 
+          ? Boolean(p.video_enabled) 
+          : (p.image_settings?.video_enabled !== undefined 
+              ? Boolean(p.image_settings.video_enabled) 
+              : Boolean(p.youtube_url || p.instagram_url));
         setEditingProduct({ 
           ...p,
+          video_enabled: isVidEnabled,
           search_tags: p.search_tags || "",
           youtube_url: p.youtube_url || media.youtube_url || "",
           instagram_url: p.instagram_url || media.instagram_url || ""
@@ -835,6 +879,11 @@ export default function AdminPage() {
       rating = Math.round((totalRatings / reviews.length) * 10) / 10;
     }
 
+    const updatedSettings = {
+      ...(editingProduct.image_settings || {}),
+      video_enabled: Boolean(editingProduct.video_enabled)
+    };
+
     const updated = {
       ...editingProduct,
       images: uploadedImageUrls,
@@ -846,19 +895,36 @@ export default function AdminPage() {
       rating,
       reviewCount: reviews.length,
       search_tags: editingProduct.search_tags || '',
-      video_enabled: Boolean(editingProduct.video_enabled),
       youtube_url: editingProduct.video_enabled ? (editingProduct.youtube_url || '') : '',
       instagram_url: editingProduct.video_enabled ? (editingProduct.instagram_url || '') : '',
-      image_settings: editingProduct.image_settings || {}
+      image_settings: updatedSettings
     };
     
     // Remove temporary UI fields that might not exist in Supabase schema to prevent PGRST204 errors
     delete updated.stockStatus;
+    delete updated.video_enabled;
 
     const updateProductInSupabase = async () => {
       try {
-        const { error } = await supabase.from('products').upsert(updated);
-        if (error) throw error;
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        // Try secure server-side Admin API first
+        const apiRes = await fetch('/api/admin/products/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(updated)
+        });
+        const apiData = await apiRes.json();
+        if (!apiData.success) {
+          // Fallback to direct client update if allowed by RLS
+          const { error } = await supabase.from('products').upsert(updated);
+          if (error) throw new Error(apiData.message || error.message);
+        }
+
         loadDbData();
         setEditingProduct(null);
         setSingleUploadImages([]);
@@ -867,8 +933,8 @@ export default function AdminPage() {
       } catch (error) {
         console.error("Error updating product in Supabase", error);
         const errMsg = error?.message || "";
-        if (errMsg.includes("row-level security") || errMsg.includes("violates row-level security")) {
-          triggerToast("Database Security Notice: Supabase RLS permission required to save product updates. Please check Admin session or Supabase RLS policy.", "error");
+        if (errMsg.includes("row-level security") || errMsg.includes("violates row-level security") || errMsg.includes("Unauthorized")) {
+          triggerToast("Database Security Notice: Supabase RLS permission required. Please ensure you are logged into Admin.", "error");
         } else {
           triggerToast("Failed to update product: " + errMsg, "error");
         }

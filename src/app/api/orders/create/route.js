@@ -70,6 +70,7 @@ export async function POST(request) {
     // 4. Save to Database as PAYMENT_PENDING
     const dbOrder = {
       order_number: orderId,
+      customer_id: customerDetails.userId || null,
       guest_email: customerDetails.email,
       guest_phone: customerDetails.phone,
       total_mrp: subtotal,

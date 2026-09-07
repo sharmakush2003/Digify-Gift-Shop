@@ -20,13 +20,17 @@ async function verifyAdminSession(request) {
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return null;
 
-  // Verify the token against Supabase Auth — uses anon client so we validate the JWT properly
+  // Verify the token against Supabase Auth
   const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey);
   const { data: { user }, error } = await supabaseAuthClient.auth.getUser(token);
   if (error || !user) return null;
 
-  // Check the role in the users table using the service-role client (bypasses RLS safely for this internal lookup)
-  const { data: userData, error: roleError } = await supabaseAdmin
+  // If service role key is available, use supabaseAdmin; otherwise use authenticated client with token
+  const clientToUse = supabaseServiceKey ? supabaseAdmin : createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+
+  const { data: userData, error: roleError } = await clientToUse
     .from('users')
     .select('role')
     .eq('id', user.id)
@@ -34,19 +38,21 @@ async function verifyAdminSession(request) {
 
   if (roleError || !userData || userData.role !== 'admin') return null;
 
-  return user;
+  return { user, client: clientToUse };
 }
 
 // GET /api/admin/orders — fetch all orders with items and products
 export async function GET(request) {
   try {
-    const user = await verifyAdminSession(request);
-    if (!user) {
+    const adminSession = await verifyAdminSession(request);
+    if (!adminSession) {
       return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
     }
 
+    const targetClient = adminSession.client;
+
     // Attempt relational query first
-    let { data: ordersData, error: relError } = await supabaseAdmin
+    let { data: ordersData, error: relError } = await targetClient
       .from('orders')
       .select('*, order_items(*, products(*))')
       .order('created_at', { ascending: false });
@@ -54,11 +60,11 @@ export async function GET(request) {
     if (relError) {
       console.warn('Relational fetch failed, falling back to manual merge.', relError);
       // Fallback: fetch separately and merge
-      const { data: simpleOrders, error: ordErr } = await supabaseAdmin.from('orders').select('*').order('created_at', { ascending: false });
+      const { data: simpleOrders, error: ordErr } = await targetClient.from('orders').select('*').order('created_at', { ascending: false });
       if (ordErr) throw ordErr;
 
-      const { data: simpleItems } = await supabaseAdmin.from('order_items').select('*');
-      const { data: productsData } = await supabaseAdmin.from('products').select('*');
+      const { data: simpleItems } = await targetClient.from('order_items').select('*');
+      const { data: productsData } = await targetClient.from('products').select('*');
 
       ordersData = (simpleOrders || []).map(order => {
         const itemsForOrder = (simpleItems || []).filter(item => item.order_id === order.id);

@@ -49,7 +49,7 @@ export default function ProductVideoEmbed({ product }) {
 
   const isYtShort = finalYtUrl.includes('/shorts/');
 
-  if (product.video_enabled === false || (!finalYtUrl && !finalIgUrl)) {
+  if (product.video_enabled === false || product.image_settings?.video_enabled === false || (!finalYtUrl && !finalIgUrl)) {
     return null;
   }
 

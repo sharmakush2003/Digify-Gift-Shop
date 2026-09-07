@@ -54,8 +54,14 @@ export function AppProvider({ children }) {
                 warrantyVal = warrantyMap[p.id] || warrantyMap[String(p.id)];
               } catch (err) {}
             }
+            const isVidEnabled = p.video_enabled !== undefined 
+              ? Boolean(p.video_enabled) 
+              : (p.image_settings?.video_enabled !== undefined 
+                  ? Boolean(p.image_settings.video_enabled) 
+                  : Boolean(p.youtube_url || p.instagram_url));
             return {
               ...p,
+              video_enabled: isVidEnabled,
               search_tags: p.search_tags || '',
               warranty: warrantyVal || "No Warranty",
               youtube_url: p.youtube_url || media.youtube_url || '',

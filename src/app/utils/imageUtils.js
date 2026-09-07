@@ -54,7 +54,7 @@ export function getProductMediaUrls(product) {
     }
   }
 
-  if (product.video_enabled === false) {
+  if (product.video_enabled === false || product.image_settings?.video_enabled === false) {
     return { youtube_url: '', instagram_url: '' };
   }
 

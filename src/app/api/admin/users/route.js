@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rppakudcmvwlkcxjhnfn.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_AUO4h2oUniw9oE4moZm3kw_HHjziI09';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
 async function verifyAdminSession(request) {
@@ -16,44 +17,45 @@ async function verifyAdminSession(request) {
   const { data: { user }, error } = await supabaseAuthClient.auth.getUser(token);
   if (error || !user) return null;
 
-  const clientToUse = supabaseServiceKey ? supabaseAdmin : createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  });
+  const { data: userData, error: roleError } = await supabaseAdmin
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
 
-  const { data: userData, error: roleError } = await clientToUse
-    .from('users').select('role').eq('id', user.id).single();
   if (roleError || !userData || userData.role !== 'admin') return null;
 
-  return { user, client: clientToUse };
+  return { user, token };
 }
 
-export async function POST(request) {
+export async function GET(request) {
   try {
     const adminSession = await verifyAdminSession(request);
     if (!adminSession) {
-      return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
+      return NextResponse.json({ success: false, message: 'Unauthorized. Genuine administrator authorization required.' }, { status: 401 });
     }
 
-    const targetClient = adminSession.client;
-    const { id, is_active } = await request.json();
-    if (!id) {
-      return NextResponse.json({ success: false, message: 'Coupon ID is required' }, { status: 400 });
+    let targetClient = supabaseAdmin;
+    if (!supabaseServiceKey && adminSession.token) {
+      targetClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${adminSession.token}` } }
+      });
     }
 
-    const { data, error } = await targetClient
-      .from('coupons')
-      .update({ is_active })
-      .eq('id', id)
-      .select();
+    const [customersRes, usersRes, ordersRes] = await Promise.all([
+      targetClient.from('customers').select('*'),
+      targetClient.from('users').select('*'),
+      targetClient.from('orders').select('id, order_number, final_total, customer_id, guest_phone, guest_email, shipping_address, created_at')
+    ]);
 
-    if (error) {
-      console.error('Error toggling coupon status:', error);
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({
+      success: true,
+      customers: customersRes.data || [],
+      users: usersRes.data || [],
+      orders: ordersRes.data || []
+    });
   } catch (err) {
-    console.error('Server error toggling coupon status:', err);
+    console.error('Server error fetching admin users data:', err);
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
