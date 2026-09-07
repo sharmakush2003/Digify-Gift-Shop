@@ -81,6 +81,21 @@ button, input, select, textarea {
   border-radius: 3px;
 }
 
+/* Smart HD Image Enhancement for All Products */
+img {
+  image-rendering: -webkit-optimize-contrast;
+  backface-visibility: hidden;
+}
+
+.product-image,
+.product-card-image,
+.catalog-product-img,
+.zoom-main-img,
+.zoom-thumb-img,
+.modal-img-preview {
+  filter: brightness(1.02) contrast(1.04);
+}
+
 /* Modal lock viewport scroll */
 body.modal-open {
   overflow: hidden !important;

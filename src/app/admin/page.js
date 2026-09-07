@@ -17,6 +17,7 @@ import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import Papa from "papaparse";
 import { getProductMediaUrls } from "../utils/imageUtils";
+import ConfirmModal from "./ConfirmModal";
 import "./admin.css";
 
 export default function AdminPage() {
@@ -69,7 +70,7 @@ export default function AdminPage() {
 
   const handleRemoveComboRow = (id) => {
     if (comboSelectedProducts.length <= 1) {
-      alert("At least one product must be included in the hamper!");
+      triggerToast("At least one product must be included in the hamper!", "warning");
       return;
     }
     setComboSelectedProducts(prev => prev.filter(item => item.id !== id));
@@ -102,14 +103,29 @@ export default function AdminPage() {
 
   // Toast Notification states
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("info"); // 'success' | 'error' | 'warning' | 'info'
   const [showToast, setShowToast] = useState(false);
+  const toastTimeoutRef = useRef(null);
 
-  // Bulk Upload states
+  // Luxury Confirm Modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "Confirm Action",
+    message: "Are you sure you want to proceed?",
+    subMessage: "This action cannot be undone.",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    type: "danger",
+    item: null,
+    isLoading: false,
+    onConfirm: null
+  });
+
+  // Bulk JSON Import states
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
-  const [bulkImages, setBulkImages] = useState([]);
-  const [bulkCsvFile, setBulkCsvFile] = useState(null);
-  const [bulkUploadStatus, setBulkUploadStatus] = useState("");
-  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [jsonInputText, setJsonInputText] = useState("");
+  const [jsonValidationResult, setJsonValidationResult] = useState(null);
+  const [isJsonImporting, setIsJsonImporting] = useState(false);
 
   // Add Product & Filter States
   const [expandedAdminOrderId, setExpandedAdminOrderId] = useState(null);
@@ -337,10 +353,12 @@ export default function AdminPage() {
     };
   }, []);
 
-  const triggerToast = (msg) => {
+  const triggerToast = (msg, type = "info") => {
     setToastMessage(msg);
+    setToastType(type);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setShowToast(false), 3800);
   };
 
   // Authentication logic
@@ -386,9 +404,16 @@ export default function AdminPage() {
       if (singleUploadImages.length > 0) {
         const imagesToUpload = singleUploadImages.slice(0, 5);
         for (const file of imagesToUpload) {
+          const options = { maxSizeMB: 2.0, maxWidthOrHeight: 2048, initialQuality: 0.92, useWebWorker: true };
+          let fileToUpload = file;
+          try {
+            fileToUpload = await imageCompression(file, options);
+          } catch (compErr) {
+            console.warn("Compression skipped, uploading original:", compErr);
+          }
           const fileExt = file.name.split('.').pop();
           const fileName = `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, file);
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, fileToUpload);
           if (uploadError) throw uploadError;
           const { data } = supabase.storage.from('product-images').getPublicUrl(fileName);
           uploadedImageUrls.push(data.publicUrl);
@@ -412,7 +437,8 @@ export default function AdminPage() {
         microwave: newProduct.microwave,
         youtube_url: newProduct.youtube_url || '',
         instagram_url: newProduct.instagram_url || '',
-        image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg'
+        image: uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : '/placeholder.jpg',
+        images: uploadedImageUrls.length > 0 ? uploadedImageUrls : ['/placeholder.jpg']
       };
 
       const { error: insertErr } = await supabase.from('products').insert(newProductRecord);
@@ -442,19 +468,81 @@ export default function AdminPage() {
     triggerToast("Logged out successfully");
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm(`Are you sure you want to delete Product #${productId}? This cannot be undone.`)) {
-      return;
-    }
-    try {
-      const { error } = await supabase.from('products').delete().eq('id', productId);
-      if (error) throw error;
-      triggerToast("Product deleted successfully");
-      loadDbData();
-    } catch (err) {
-      console.error(err);
-      triggerToast("Failed to delete product: " + err.message);
-    }
+  const handleDeleteProduct = (productId) => {
+    const prod = productsList.find(p => String(p.id) === String(productId));
+    const prodName = prod?.name || `Product #${productId}`;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Product",
+      message: `Are you sure you want to permanently delete "${prodName}"?`,
+      subMessage: "This product will be immediately removed from the live online catalog and store inventory database. This action cannot be reversed.",
+      confirmText: "Yes, Delete Product",
+      cancelText: "Keep Product",
+      type: "danger",
+      item: prod ? {
+        id: prod.id,
+        name: prod.name,
+        price: prod.price,
+        image: prod.image,
+        category: prod.category || prod.department,
+        stock: prod.stock
+      } : { id: productId, name: `Product #${productId}` },
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true }));
+        try {
+          const { error } = await supabase.from('products').delete().eq('id', productId);
+          if (error) throw error;
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          triggerToast(`Product #${productId} deleted successfully`, "success");
+          loadDbData();
+        } catch (err) {
+          console.error("Delete product error:", err);
+          setConfirmModal(prev => ({ ...prev, isLoading: false }));
+          const errMsg = err?.message || "";
+          if (errMsg.includes("foreign key") || errMsg.includes("violates foreign key") || err?.code === "23503") {
+            triggerToast("Cannot Delete: This product has already been ordered by customers and is recorded in order invoices. Please change its Stock to 0 or 'Out of Stock' to hide it.", "warning");
+          } else if (errMsg.includes("row-level security") || errMsg.includes("violates row-level security")) {
+            triggerToast("Database Security Notice: Supabase RLS permission required. Please ensure you are logged into Admin or update Supabase RLS policies.", "error");
+          } else {
+            triggerToast("Failed to delete product: " + errMsg, "error");
+          }
+        }
+      }
+    });
+  };
+
+  const handleStartEditProduct = (p) => {
+    const media = getProductMediaUrls(p);
+    const prodName = p?.name || `Product #${p.id}`;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Edit Product",
+      message: `Do you want to edit specifications for "${prodName}"?`,
+      subMessage: "Proceeding will open the editor where you can modify pricing, stock levels, images, warranty, and reviews.",
+      confirmText: "Proceed to Edit",
+      cancelText: "Cancel",
+      type: "info",
+      item: {
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        image: p.image,
+        category: p.category || p.department,
+        stock: p.stock
+      },
+      isLoading: false,
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setEditingProduct({ 
+          ...p,
+          youtube_url: p.youtube_url || media.youtube_url || "",
+          instagram_url: p.instagram_url || media.instagram_url || ""
+        });
+      }
+    });
   };
 
   const handleProcessOrder = async (orderId, nextStatus, docId) => {
@@ -661,7 +749,7 @@ export default function AdminPage() {
       const filesToUpload = singleUploadImages.slice(0, availableSlots);
       for (let i = 0; i < filesToUpload.length; i++) {
         const file = filesToUpload[i];
-        const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
+        const options = { maxSizeMB: 2.0, maxWidthOrHeight: 2048, initialQuality: 0.92, useWebWorker: true };
         try {
           const compressedFile = await imageCompression(file, options);
           const fileName = `${Date.now()}_${file.name}`;
@@ -708,10 +796,15 @@ export default function AdminPage() {
         setEditingProduct(null);
         setSingleUploadImages([]);
         setIsSingleUploading(false);
-        triggerToast(`Updated Product: ${updated.name}`);
+        triggerToast(`Updated Product: ${updated.name}`, "success");
       } catch (error) {
         console.error("Error updating product in Supabase", error);
-        triggerToast("Failed to update product");
+        const errMsg = error?.message || "";
+        if (errMsg.includes("row-level security") || errMsg.includes("violates row-level security")) {
+          triggerToast("Database Security Notice: Supabase RLS permission required to save product updates. Please check Admin session or Supabase RLS policy.", "error");
+        } else {
+          triggerToast("Failed to update product: " + errMsg, "error");
+        }
         setIsSingleUploading(false);
       }
     };
@@ -754,11 +847,11 @@ export default function AdminPage() {
     e.preventDefault();
     const validSelections = comboSelectedProducts.filter(item => item.productId !== "");
     if (validSelections.length === 0) {
-      alert("Please select at least one existing product from the dropdown to create a combo!");
+      triggerToast("Please select at least one existing product to create a combo!", "warning");
       return;
     }
     if (!newComboName || !newComboPrice || !newComboStock) {
-      alert("Please fill in core hamper details (Title, Price, Stock).");
+      triggerToast("Please fill in core hamper details (Title, Price, Stock).", "warning");
       return;
     }
 
@@ -770,7 +863,7 @@ export default function AdminPage() {
     if (singleUploadImages && singleUploadImages.length > 0) {
       for (let i = 0; i < singleUploadImages.length; i++) {
         const file = singleUploadImages[i];
-        const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
+        const options = { maxSizeMB: 2.0, maxWidthOrHeight: 2048, initialQuality: 0.92, useWebWorker: true };
         try {
           const compressedFile = await imageCompression(file, options);
           const fileName = `${Date.now()}_${file.name}`;
@@ -840,142 +933,330 @@ export default function AdminPage() {
     addComboToSupabase();
   };
 
-  const handleBulkUploadSubmit = async () => {
-    if (!bulkCsvFile) {
-      alert("Please upload the CSV file first.");
-      return;
+  // JSON Bulk Product Import Handlers
+  const SAMPLE_JSON_TEMPLATE = [
+    {
+      "name": "Orient Royal Gold Rim Dinner Set (18 Pcs)",
+      "department": "Crockery & Dining",
+      "category": "Dinner Sets",
+      "price": 3499,
+      "stock": 25,
+      "fragile": true,
+      "microwave": false,
+      "barcode": "890123456789",
+      "hsn": "6911",
+      "gst": 18,
+      "description": "Handcrafted luxury bone china dinner collection with 24k gold leaf accents.",
+      "image": "/placeholder.jpg"
+    },
+    {
+      "name": "La Coppera Pure Hammered Copper Jug (1.5L)",
+      "department": "Serveware",
+      "category": "Jugs & Pitchers",
+      "price": 1299,
+      "stock": 40,
+      "fragile": false,
+      "microwave": false,
+      "barcode": "890987654321",
+      "hsn": "7418",
+      "gst": 18,
+      "description": "Pure hammered Ayurvedic copper water jug with anti-bacterial health benefits.",
+      "image": "/placeholder.jpg"
     }
-    setIsBulkUploading(true);
-    setBulkUploadStatus("Starting bulk process...");
+  ];
 
-    try {
-      // 1. Process & Upload Images
-      const uploadedImageUrls = {}; // Map of filename -> URL
-      
-      if (bulkImages && bulkImages.length > 0) {
-        for (let i = 0; i < bulkImages.length; i++) {
-          setBulkUploadStatus(`Uploading photo ${i + 1} of ${bulkImages.length}... please wait`);
-          const file = bulkImages[i];
-          const options = {
-            maxSizeMB: 0.2, // Compress to 200KB max
-            maxWidthOrHeight: 800,
-            useWebWorker: true,
-          };
-          
-          try {
-            const compressedFile = await imageCompression(file, options);
-            const fileName = `${Date.now()}_${file.name}`;
-            
-            const { data, error } = await supabase.storage
-              .from('product-images')
-              .upload(fileName, compressedFile, {
-                cacheControl: '3600',
-                upsert: false
-              });
-              
-            if (error) {
-              console.error("Error uploading image:", error);
-              continue; // Skip failed image
-            }
-            
-            const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
-            uploadedImageUrls[file.name] = publicUrlData.publicUrl;
-            
-          } catch (err) {
-            console.error("Compression error:", err);
-          }
+  // Smart JSON Sanitizer & Cleaner
+  const sanitizeJsonString = (raw) => {
+    if (!raw) return "";
+    let cleaned = raw;
+    // 1. Convert smart/curly quotes to standard double quotes
+    cleaned = cleaned.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+    // 2. Fix empty key values like "image": \s*[,}\]] -> "image": ""
+    cleaned = cleaned.replace(/"([^"]+)"\s*:\s*(?=[\,\}\]])/g, '"$1": ""');
+    // 3. Fix empty keys followed by newlines
+    cleaned = cleaned.replace(/"([^"]+)"\s*:\s*[\r\n]+\s*(?=[\,\}\]])/g, '"$1": ""\n');
+    // 4. Remove trailing commas before closing braces/brackets
+    cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
+    return cleaned;
+  };
+
+  const diagnoseJsonError = (raw) => {
+    const lines = raw.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Check for key without value e.g. "image":
+      if (/"([^"]+)"\s*:\s*$/.test(line.trim()) || /"([^"]+)"\s*:\s*(?:,|})/.test(line.trim())) {
+        const match = line.match(/"([^"]+)"\s*:/);
+        if (match && !line.includes('""') && !line.includes("''") && !line.includes('null') && !line.includes('true') && !line.includes('false') && !/\d+/.test(line.split(':')[1] || '')) {
+          return `Line ${i + 1}: The field "${match[1]}" was left blank without quotes or value. Either delete that line, or write "${match[1]}": "" (empty quotes).`;
         }
       }
+    }
+    return null;
+  };
 
-      // 2. Parse CSV
-      setBulkUploadStatus("Parsing CSV file...");
-      Papa.parse(bulkCsvFile, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          const rows = results.data;
-          setBulkUploadStatus(`Found ${rows.length} products. Linking images and saving to database...`);
-          
-          const newProducts = rows.map((row, index) => {
-            const newId = productsList.length > 0 ? Math.max(...productsList.map(p => p.id)) + 1 + index : 101 + index;
-            let finalImageUrl = "/images/acacia_wood_casserole.png"; // fallback
-            let finalImageUrls = [];
-            
-            const exactMatch = row.Image_File_Name && uploadedImageUrls[row.Image_File_Name];
-            if (exactMatch) {
-              finalImageUrl = uploadedImageUrls[row.Image_File_Name];
-              finalImageUrls.push(finalImageUrl);
-            } else {
-              // Fuzzy match based on SKU ID (handles 201_1.webp, 201_2.webp, etc.)
-              const fuzzyKeys = Object.keys(uploadedImageUrls).filter(key => key.includes(String(row.id)));
-              if (fuzzyKeys.length > 0) {
-                fuzzyKeys.sort(); // Sort to keep 201_1 before 201_2
-                finalImageUrls = fuzzyKeys.map(key => uploadedImageUrls[key]);
-                finalImageUrl = finalImageUrls[0];
-              }
-            }
-
-            return {
-              id: parseInt(row.id) || newId,
-              name: row.name || "Untitled Product",
-              price: parseFloat(row.price) || 0,
-              stock: parseInt(row.stock) || 0,
-              image: finalImageUrl,
-              images: finalImageUrls,
-              department: row.department || "Crockery & Dining",
-              category: row.category || "Serveware",
-              subCategory: row.subCategory || "Plates",
-              fragile: row.fragile === "true" || row.fragile === "TRUE" || row.fragile === true,
-              microwave: row.microwave === "true" || row.microwave === "TRUE" || row.microwave === true,
-              barcode: row.barcode || "000" + Math.floor(Math.random() * 900000 + 100000),
-              hsn: row.hsn || "9505",
-              gst: parseFloat(row.gst) || 18,
-              soldCount: parseInt(row.soldCount) || 0,
-              description: row.description || "Luxurious dining product by Orient Crockeries.",
-              rating: parseFloat(row.rating) || 5.0,
-              reviewCount: parseInt(row.reviewCount) || 0,
-              reviews: []
-            };
-          });
-
-          // 3. Batch Insert to Supabase
-          try {
-             const { error } = await supabase.from('products').upsert(newProducts);
-             if (error) throw error;
-             
-             loadDbData();
-             setShowBulkUploadModal(false);
-             setBulkImages([]);
-             setBulkCsvFile(null);
-             triggerToast(`Successfully bulk imported ${newProducts.length} products!`);
-          } catch (dbError) {
-             console.error("Database insert error:", dbError);
-             setBulkUploadStatus("Error saving to database. Check console.");
-          } finally {
-             setIsBulkUploading(false);
-          }
-        },
-        error: (err) => {
-          console.error("CSV Parse Error:", err);
-          setBulkUploadStatus("Error parsing CSV.");
-          setIsBulkUploading(false);
-        }
-      });
-      
+  const handleAutoFixJson = () => {
+    if (!jsonInputText.trim()) {
+      triggerToast("Please paste JSON first.", "warning");
+      return;
+    }
+    const cleaned = sanitizeJsonString(jsonInputText);
+    try {
+      const parsed = JSON.parse(cleaned);
+      const formatted = JSON.stringify(parsed, null, 2);
+      setJsonInputText(formatted);
+      setJsonValidationResult({ valid: true, count: Array.isArray(parsed) ? parsed.length : 1 });
+      triggerToast("✨ JSON auto-fixed and formatted successfully!", "success");
     } catch (err) {
-      console.error("Bulk upload general error:", err);
-      setBulkUploadStatus("An unexpected error occurred.");
-      setIsBulkUploading(false);
+      const hint = diagnoseJsonError(jsonInputText) || err.message;
+      setJsonValidationResult({ valid: false, error: hint });
+      triggerToast("Could not auto-fix: " + hint, "error");
+    }
+  };
+
+  const handleCopySampleJson = () => {
+    const formatted = JSON.stringify(SAMPLE_JSON_TEMPLATE, null, 2);
+    setJsonInputText(formatted);
+    setJsonValidationResult(null);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(formatted);
+    }
+    triggerToast("Sample JSON template loaded & copied to clipboard!", "success");
+  };
+
+  const handleValidateJson = () => {
+    if (!jsonInputText.trim()) {
+      setJsonValidationResult({ valid: false, error: "Please paste a JSON array of products first." });
+      triggerToast("Please paste a JSON array first.", "warning");
+      return;
+    }
+
+    // Try direct parse first
+    try {
+      const parsed = JSON.parse(jsonInputText);
+      if (!Array.isArray(parsed)) {
+        setJsonValidationResult({ valid: false, error: "JSON must be an Array of product objects: [ { ... }, { ... } ]" });
+        triggerToast("Invalid format: JSON must be an array [ ... ]", "error");
+        return;
+      }
+      if (parsed.length === 0) {
+        setJsonValidationResult({ valid: false, error: "JSON array is empty. Please add at least 1 product object." });
+        triggerToast("JSON array is empty.", "warning");
+        return;
+      }
+      setJsonValidationResult({ valid: true, count: parsed.length });
+      triggerToast(`✓ JSON is valid! Found ${parsed.length} product(s) ready for import.`, "success");
+      return;
+    } catch (directErr) {
+      // Try with auto-sanitizer
+      const cleaned = sanitizeJsonString(jsonInputText);
+      try {
+        const parsedClean = JSON.parse(cleaned);
+        if (Array.isArray(parsedClean) && parsedClean.length > 0) {
+          setJsonValidationResult({ 
+            valid: true, 
+            count: parsedClean.length, 
+            warning: "Detected minor syntax issues (like empty values or trailing commas). Click 'Auto-Fix & Format' or Import directly." 
+          });
+          triggerToast(`✓ Valid (${parsedClean.length} products). Minor syntax auto-corrected!`, "success");
+          return;
+        }
+      } catch (_) {}
+
+      // Detailed diagnostics
+      const hint = diagnoseJsonError(jsonInputText);
+      const errorMsg = hint ? hint : `JSON Syntax Error: ${directErr.message}. (Tip: Click 'Auto-Fix & Format' or ensure all keys have valid values like \"\" or numbers).`;
+      setJsonValidationResult({ valid: false, error: errorMsg });
+      triggerToast(hint || "Invalid JSON syntax. Click 'Auto-Fix' or check quotes.", "error");
+    }
+  };
+
+  const handleImportJsonToSupabase = async () => {
+    if (!jsonInputText.trim()) {
+      triggerToast("Please paste your JSON array first.", "warning");
+      return;
+    }
+    let parsedData = [];
+    try {
+      // Use sanitizer to be forgiving with empty fields / commas
+      const cleaned = sanitizeJsonString(jsonInputText);
+      const parsed = JSON.parse(cleaned);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        triggerToast("JSON must be a non-empty array of products.", "warning");
+        return;
+      }
+      parsedData = parsed;
+    } catch (err) {
+      const hint = diagnoseJsonError(jsonInputText);
+      triggerToast(hint || ("Cannot import: " + err.message), "error");
+      setJsonValidationResult({ valid: false, error: hint || err.message });
+      return;
+    }
+
+    setIsJsonImporting(true);
+    try {
+      const existingMaxId = productsList.length > 0 ? Math.max(...productsList.map(p => parseInt(p.id) || 0)) : 200;
+      
+      const newProducts = parsedData.map((item, index) => {
+        const prodId = item.id ? parseInt(item.id) : (existingMaxId + 1 + index);
+        const img = item.image || (Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : '/placeholder.jpg');
+        const imgs = Array.isArray(item.images) && item.images.length > 0 ? item.images : [img];
+
+        return {
+          id: prodId,
+          name: item.name || `Imported Product #${prodId}`,
+          price: parseFloat(item.price) || 0,
+          stock: parseInt(item.stock) || 0,
+          department: item.department || "Crockery & Dining",
+          category: item.category || "General",
+          subCategory: item.subCategory || "Plates",
+          fragile: Boolean(item.fragile),
+          microwave: Boolean(item.microwave),
+          barcode: item.barcode || ("000" + Math.floor(Math.random() * 900000 + 100000)),
+          hsn: item.hsn || "9505",
+          gst: parseFloat(item.gst) || 18,
+          soldCount: parseInt(item.soldCount) || 0,
+          description: item.description || "Premium dining collection by Orient Crockeries.",
+          rating: parseFloat(item.rating) || 5.0,
+          reviewCount: parseInt(item.reviewCount) || 0,
+          reviews: Array.isArray(item.reviews) ? item.reviews : [],
+          image: img,
+          images: imgs,
+          warranty: item.warranty || "1 Year Brand Warranty"
+        };
+      });
+
+      const { error } = await supabase.from('products').upsert(newProducts);
+      if (error) throw error;
+
+      loadDbData();
+      setShowBulkUploadModal(false);
+      setJsonInputText("");
+      setJsonValidationResult(null);
+      triggerToast(`🎉 Successfully imported ${newProducts.length} products to database!`, "success");
+    } catch (err) {
+      console.error("JSON Import Error:", err);
+      triggerToast("Failed to import products: " + err.message, "error");
+    } finally {
+      setIsJsonImporting(false);
     }
   };
 
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '20px', textAlign: 'center', background: 'var(--bg-main)' }}>
-        <div>
-          <i className="fa-solid fa-desktop" style={{ fontSize: '3rem', color: 'var(--primary)', marginBottom: '20px' }}></i>
-          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'white', marginBottom: '10px' }}>Desktop Only</h2>
-          <p style={{ color: 'var(--text-muted)' }}>The Admin portal is strictly restricted to laptops and desktops for security and layout reasons.</p>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        minHeight: '100vh', 
+        padding: '24px', 
+        textAlign: 'center', 
+        background: 'radial-gradient(circle at 50% 30%, #172554 0%, #0b1329 70%, #030712 100%)',
+        color: '#ffffff',
+        fontFamily: "'Inter', sans-serif"
+      }}>
+        <div style={{
+          maxWidth: "460px",
+          width: "100%",
+          backgroundColor: "rgba(255, 255, 255, 0.05)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: "24px",
+          padding: "2.5rem 2rem",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)"
+        }}>
+          {/* Security Icon Badge */}
+          <div style={{
+            width: "72px",
+            height: "72px",
+            borderRadius: "20px",
+            background: "linear-gradient(135deg, #1e3a8a 0%, #172554 100%)",
+            border: "1px solid #3b82f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 1.5rem auto",
+            color: "#60a5fa",
+            fontSize: "2rem",
+            boxShadow: "0 0 30px rgba(59, 130, 246, 0.3)"
+          }}>
+            <i className="fa-solid fa-laptop-code"></i>
+          </div>
+
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            backgroundColor: "rgba(234, 88, 12, 0.15)",
+            border: "1px solid rgba(234, 88, 12, 0.4)",
+            color: "#fb923c",
+            padding: "4px 12px",
+            borderRadius: "20px",
+            fontSize: "0.74rem",
+            fontWeight: "800",
+            textTransform: "uppercase",
+            letterSpacing: "0.8px",
+            marginBottom: "1rem"
+          }}>
+            <i className="fa-solid fa-shield-halved"></i>
+            <span>Security Policy Restriction</span>
+          </div>
+
+          <h2 style={{ 
+            fontFamily: "var(--font-serif)", 
+            fontSize: "1.8rem", 
+            color: "#ffffff", 
+            marginBottom: "0.8rem",
+            letterSpacing: "-0.5px"
+          }}>
+            Laptop & Desktop Only
+          </h2>
+
+          <p style={{ 
+            color: "#94a3b8", 
+            fontSize: "0.92rem", 
+            lineHeight: "1.6", 
+            marginBottom: "1.8rem" 
+          }}>
+            For enterprise security, financial record privacy, and complex inventory management, the <b>Orient Crockery Admin Console</b> is strictly restricted to laptops and desktop screens.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <Link 
+              href="/" 
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "13px 20px",
+                backgroundColor: "#2563eb",
+                color: "#ffffff",
+                borderRadius: "12px",
+                fontWeight: "700",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+                boxShadow: "0 4px 14px rgba(37, 99, 235, 0.3)"
+              }}
+            >
+              <i className="fa-solid fa-arrow-left"></i>
+              <span>Return to Customer Store</span>
+            </Link>
+
+            <a 
+              href="https://automatexai.co.in/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                fontSize: "0.75rem",
+                color: "#64748b",
+                textDecoration: "none",
+                marginTop: "6px"
+              }}
+            >
+              Protected by AutomateX Cloud Security
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -986,80 +1267,192 @@ export default function AdminPage() {
       <div style={{ 
         minHeight: "100vh", 
         display: "flex", 
-        backgroundColor: "#f5f7fa",
+        backgroundColor: "#0b1329",
         fontFamily: "'Inter', sans-serif"
       }}>
-        {/* Left Side - Branding (Hidden on small screens, but Admin is desktop only anyway) */}
+        {/* Left Side - Luxury Brand Showcase (Matching Reference Screenshot) */}
         <div style={{
-          flex: 1,
-          backgroundColor: "#000",
-          backgroundImage: "linear-gradient(135deg, #111 0%, #222 100%)",
+          flex: "1.1",
+          background: "radial-gradient(circle at 20% 30%, #172554 0%, #0b1329 70%, #030712 100%)",
           color: "white",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
-          padding: "4rem",
+          justifyContent: "space-between",
+          padding: "3.5rem 4rem",
           position: "relative",
-          overflow: "hidden"
+          overflow: "hidden",
+          borderRight: "1px solid rgba(255, 255, 255, 0.08)"
         }}>
-          <div style={{ position: "relative", zIndex: 2 }}>
-            <h1 style={{ color: "white", fontSize: "3.5rem", fontFamily: "var(--font-serif)", marginBottom: "1rem", letterSpacing: "2px" }}>
-              Orient <span style={{ color: "#d4af37" }}>Admin</span>
-            </h1>
-            <p style={{ fontSize: "1.2rem", color: "#aaa", maxWidth: "400px", lineHeight: "1.6", marginBottom: "3rem" }}>
-              Secure portal for managing inventory, tracking orders, and overseeing Orient Crockeries operations.
-            </p>
+          {/* Top Header badges */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", zIndex: 2 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              background: "rgba(255, 255, 255, 0.06)",
+              backdropFilter: "blur(10px)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              padding: "8px 16px",
+              borderRadius: "12px"
+            }}>
+              <i className="fa-solid fa-store" style={{ color: "#38bdf8", fontSize: "1.1rem" }}></i>
+              <div>
+                <div style={{ fontSize: "0.88rem", fontWeight: "800", color: "#f8fafc", letterSpacing: "0.5px" }}>ORIENT CROCKERIES</div>
+                <div style={{ fontSize: "0.68rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>OFFICIAL STORE PORTAL</div>
+              </div>
+            </div>
+
+            <a 
+              href="https://automatexai.co.in/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                padding: "8px 14px",
+                borderRadius: "12px",
+                textDecoration: "none",
+                color: "#ffffff"
+              }}
+            >
+              <i className="fa-solid fa-microchip" style={{ color: "#38bdf8", fontSize: "0.95rem" }}></i>
+              <div>
+                <div style={{ fontSize: "0.82rem", fontWeight: "700", color: "#ffffff" }}>AutomateX</div>
+                <div style={{ fontSize: "0.62rem", color: "#38bdf8", textTransform: "uppercase", fontWeight: "600" }}>OFFICIAL DEVELOPER</div>
+              </div>
+            </a>
           </div>
-          {/* Decorative elements */}
+
+          {/* Center Content */}
+          <div style={{ position: "relative", zIndex: 2, margin: "auto 0" }}>
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "rgba(56, 189, 248, 0.1)",
+              border: "1px solid rgba(56, 189, 248, 0.3)",
+              padding: "6px 14px",
+              borderRadius: "20px",
+              color: "#38bdf8",
+              fontSize: "0.75rem",
+              fontWeight: "700",
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+              marginBottom: "1.2rem"
+            }}>
+              <i className="fa-solid fa-code"></i> ENGINEERED BY AUTOMATEX
+            </div>
+
+            <h1 style={{ 
+              color: "#f8fafc", 
+              fontSize: "3rem", 
+              fontFamily: "var(--font-serif)", 
+              marginBottom: "1rem", 
+              letterSpacing: "-0.5px",
+              lineHeight: "1.15" 
+            }}>
+              Orient Crockery <span style={{ color: "#fbbf24" }}>Admin</span>
+            </h1>
+
+            <p style={{ fontSize: "1.05rem", color: "#94a3b8", maxWidth: "480px", lineHeight: "1.6", marginBottom: "2rem" }}>
+              Secure central portal for managing store inventory, live price updates, custom gift hampers, and Orient Crockery retail operations.
+            </p>
+
+            {/* Feature Highlights */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxWidth: "480px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+                <i className="fa-solid fa-bolt" style={{ color: "#38bdf8", width: "16px" }}></i>
+                <span>Real-time Supabase Cloud Database Sync</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+                <i className="fa-solid fa-file-csv" style={{ color: "#34d399", width: "16px" }}></i>
+                <span>Bulk CSV & JSON Inventory Management</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+                <i className="fa-solid fa-shield-halved" style={{ color: "#a78bfa", width: "16px" }}></i>
+                <span>Cloudflare Edge SSL Protection & Fast CDN</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+                <i className="fa-solid fa-headset" style={{ color: "#fbbf24", width: "16px" }}></i>
+                <span>24/7 Dedicated AutomateX Developer Support</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Live System Indicator */}
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "space-between", 
+            alignItems: "center", 
+            borderTop: "1px solid rgba(255, 255, 255, 0.08)", 
+            paddingTop: "1.2rem", 
+            zIndex: 2,
+            fontSize: "0.8rem",
+            color: "#64748b"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#34d399", fontWeight: "600" }}>
+              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block", boxShadow: "0 0 10px #10b981" }}></span>
+              System Status: Fully Operational
+            </div>
+            <div>Cloudflare Edge SSL Protected</div>
+          </div>
+
+          {/* Decorative background glow */}
           <div style={{
             position: "absolute",
-            top: "-10%",
-            right: "-10%",
-            width: "500px",
-            height: "500px",
+            top: "20%",
+            left: "10%",
+            width: "400px",
+            height: "400px",
             borderRadius: "50%",
-            background: "radial-gradient(circle, rgba(212,175,55,0.1) 0%, rgba(0,0,0,0) 70%)",
-            zIndex: 1
+            background: "radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, rgba(0,0,0,0) 70%)",
+            zIndex: 1,
+            pointerEvents: "none"
           }}></div>
         </div>
 
-        {/* Right Side - Login Form */}
+        {/* Right Side - Login Form & AutomateX Support Card */}
         <div style={{
-          flex: 1,
+          flex: "0.9",
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
           backgroundColor: "#ffffff",
-          padding: "2rem"
+          padding: "3rem 2rem",
+          overflowY: "auto"
         }}>
           <div style={{ width: "100%", maxWidth: "420px" }}>
-            <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+            <div style={{ textAlign: "center", marginBottom: "2rem" }}>
               <div style={{ 
-                width: "60px", 
-                height: "60px", 
-                backgroundColor: "#f5f7fa", 
-                borderRadius: "12px",
+                width: "56px", 
+                height: "56px", 
+                backgroundColor: "#f1f5f9", 
+                borderRadius: "14px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                margin: "0 auto 1.5rem auto",
-                color: "#111",
-                fontSize: "1.5rem"
+                margin: "0 auto 1.2rem auto",
+                color: "#0f172a",
+                fontSize: "1.4rem",
+                border: "1px solid #e2e8f0"
               }}>
                 <i className="fa-solid fa-shield-halved"></i>
               </div>
-              <h2 style={{ fontSize: "1.8rem", color: "#111", marginBottom: "0.5rem", fontWeight: "600" }}>Welcome Back</h2>
-              <p style={{ color: "#666", fontSize: "0.95rem" }}>Please enter your credentials to access the dashboard.</p>
+              <h2 style={{ fontSize: "1.75rem", color: "#0f172a", marginBottom: "0.3rem", fontWeight: "800", letterSpacing: "-0.5px" }}>Welcome Back</h2>
+              <p style={{ color: "#64748b", fontSize: "0.92rem", margin: 0 }}>Please enter your credentials to access the dashboard.</p>
             </div>
             
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "600", color: "#444", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Email Address
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: "700", color: "#334155", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Admin Email Address
                 </label>
                 <div style={{ position: "relative" }}>
-                  <div style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", color: "#999" }}>
+                  <div style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>
                     <i className="fa-regular fa-envelope"></i>
                   </div>
                   <input 
@@ -1070,27 +1463,37 @@ export default function AdminPage() {
                     onChange={(e) => setLoginEmail(e.target.value)} 
                     style={{ 
                       width: '100%', 
-                      padding: '14px 15px 14px 45px', 
-                      border: '1.5px solid #eaeaea', 
-                      borderRadius: '8px', 
-                      fontSize: '1rem', 
-                      backgroundColor: '#fff', 
-                      color: '#333',
+                      padding: '12px 14px 12px 42px', 
+                      border: '1.5px solid #e2e8f0', 
+                      borderRadius: '10px', 
+                      fontSize: '0.95rem', 
+                      backgroundColor: '#f8fafc', 
+                      color: '#0f172a',
                       transition: 'all 0.2s',
                       outline: 'none'
                     }}
-                    onFocus={(e) => e.target.style.borderColor = '#111'}
-                    onBlur={(e) => e.target.style.borderColor = '#eaeaea'}
+                    onFocus={(e) => { e.target.style.borderColor = '#0f172a'; e.target.style.backgroundColor = '#fff'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.backgroundColor = '#f8fafc'; }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: "600", color: "#444", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Password
-                </label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "0.78rem", fontWeight: "700", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Password
+                  </label>
+                  <a 
+                    href="https://wa.me/917425016636?text=Hi%20AutomateX%2C%20I%20forgot%20my%20Orient%20Crockeries%20admin%20password." 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ fontSize: "0.75rem", color: "#2563eb", textDecoration: "none", fontWeight: "600" }}
+                  >
+                    Forgot Password?
+                  </a>
+                </div>
                 <div style={{ position: "relative" }}>
-                  <div style={{ position: "absolute", left: "15px", top: "50%", transform: "translateY(-50%)", color: "#999" }}>
+                  <div style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>
                     <i className="fa-solid fa-lock"></i>
                   </div>
                   <input 
@@ -1101,30 +1504,30 @@ export default function AdminPage() {
                     onChange={(e) => setLoginPassword(e.target.value)} 
                     style={{ 
                       width: '100%', 
-                      padding: '14px 45px 14px 45px', 
-                      border: '1.5px solid #eaeaea', 
-                      borderRadius: '8px', 
-                      fontSize: '1rem', 
-                      backgroundColor: '#fff', 
-                      color: '#333',
+                      padding: '12px 42px 12px 42px', 
+                      border: '1.5px solid #e2e8f0', 
+                      borderRadius: '10px', 
+                      fontSize: '0.95rem', 
+                      backgroundColor: '#f8fafc', 
+                      color: '#0f172a',
                       transition: 'all 0.2s',
                       outline: 'none'
                     }}
-                    onFocus={(e) => e.target.style.borderColor = '#111'}
-                    onBlur={(e) => e.target.style.borderColor = '#eaeaea'}
+                    onFocus={(e) => { e.target.style.borderColor = '#0f172a'; e.target.style.backgroundColor = '#fff'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.backgroundColor = '#f8fafc'; }}
                   />
                   <button 
                     type="button" 
                     onClick={() => setShowPassword(!showPassword)}
                     style={{ 
                       position: 'absolute', 
-                      right: '15px', 
+                      right: '12px', 
                       top: "50%", 
                       transform: "translateY(-50%)",
                       background: 'none', 
                       border: 'none', 
                       cursor: 'pointer', 
-                      color: '#999',
+                      color: '#94a3b8',
                       padding: "5px"
                     }}
                   >
@@ -1138,13 +1541,12 @@ export default function AdminPage() {
                   backgroundColor: "#fef2f2", 
                   border: "1px solid #fecaca", 
                   color: "#dc2626", 
-                  padding: "12px", 
-                  borderRadius: "6px", 
+                  padding: "10px 12px", 
+                  borderRadius: "8px", 
                   fontSize: "0.85rem", 
                   display: "flex", 
                   alignItems: "center", 
-                  gap: "8px",
-                  marginTop: "5px"
+                  gap: "8px"
                 }}>
                   <i className="fa-solid fa-circle-exclamation"></i>
                   <span>{authError}</span>
@@ -1154,32 +1556,158 @@ export default function AdminPage() {
               <button 
                 type="submit" 
                 style={{ 
-                  marginTop: "1rem",
+                  marginTop: "0.5rem",
                   width: "100%",
-                  padding: "14px",
-                  backgroundColor: "#111",
+                  padding: "13px",
+                  backgroundColor: "#0f172a",
                   color: "white",
                   border: "none",
-                  borderRadius: "8px",
-                  fontSize: "1rem",
-                  fontWeight: "600",
+                  borderRadius: "10px",
+                  fontSize: "0.95rem",
+                  fontWeight: "700",
                   cursor: "pointer",
-                  transition: "background 0.2s",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.25)"
                 }}
-                onMouseOver={(e) => e.target.style.backgroundColor = "#333"}
-                onMouseOut={(e) => e.target.style.backgroundColor = "#111"}
               >
                 Sign In to Dashboard
               </button>
             </form>
 
-            <div style={{ textAlign: "center", marginTop: "2rem" }}>
-              <p style={{ color: "#888", fontSize: "0.85rem", margin: "0 0 5px 0" }}>
-                &copy; {new Date().getFullYear()} Orient Crockeries. All rights reserved.
-              </p>
-              <p style={{ color: "#aaa", fontSize: "0.8rem", margin: 0 }}>
-                Developed & Managed by <strong style={{ color: "#444" }}>Digify Soft Solution</strong>
+            {/* Need Help? AutomateX Support Card (Matching Reference Screenshot) */}
+            <div style={{
+              marginTop: "1.5rem",
+              padding: "16px",
+              borderRadius: "14px",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: "800", color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <i className="fa-solid fa-headset" style={{ color: "#059669" }}></i>
+                  <span>Need Help? AutomateX Support</span>
+                </div>
+                <span style={{ fontSize: "0.68rem", fontWeight: "700", backgroundColor: "#ecfdf5", color: "#059669", padding: "2px 8px", borderRadius: "12px", border: "1px solid #a7f3d0" }}>
+                  24/7 Priority
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                <a 
+                  href="tel:+917425016636"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 10px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    color: "#0f172a",
+                    fontSize: "0.78rem",
+                    fontWeight: "700",
+                    textDecoration: "none"
+                  }}
+                >
+                  <i className="fa-solid fa-phone" style={{ color: "#16a34a", fontSize: "0.8rem" }}></i>
+                  <span>+91 7425016636</span>
+                </a>
+
+                <a 
+                  href="https://wa.me/917425016636?text=Hi%20AutomateX%2C%20I%20need%20assistance%20with%20Orient%20Crockeries%20portal."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 10px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    color: "#0f172a",
+                    fontSize: "0.78rem",
+                    fontWeight: "700",
+                    textDecoration: "none"
+                  }}
+                >
+                  <i className="fa-brands fa-whatsapp" style={{ color: "#10b981", fontSize: "0.88rem" }}></i>
+                  <span>WhatsApp</span>
+                </a>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <a 
+                  href="tel:+919424466992"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    color: "#475569",
+                    fontSize: "0.75rem",
+                    fontWeight: "600",
+                    textDecoration: "none"
+                  }}
+                >
+                  <i className="fa-solid fa-phone-volume" style={{ color: "#3b82f6", fontSize: "0.75rem" }}></i>
+                  <span>Alternate: +91 9424466992</span>
+                </a>
+
+                <a 
+                  href="mailto:support@digifysoft.in"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    color: "#475569",
+                    fontSize: "0.75rem",
+                    fontWeight: "600",
+                    textDecoration: "none",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  <i className="fa-solid fa-envelope" style={{ color: "#ef4444", fontSize: "0.75rem" }}></i>
+                  <span>support@digifysoft.in</span>
+                </a>
+
+                <a 
+                  href="https://automatexai.co.in/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    backgroundColor: "#f1f5f9",
+                    border: "1px dashed #cbd5e1",
+                    borderRadius: "6px",
+                    color: "#2563eb",
+                    fontSize: "0.74rem",
+                    fontWeight: "700",
+                    textDecoration: "none"
+                  }}
+                >
+                  <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: "0.7rem" }}></i>
+                  <span>Visit AutomateX Portal (automatexai.co.in)</span>
+                </a>
+              </div>
+            </div>
+
+            <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+              <p style={{ color: "#64748b", fontSize: "0.78rem", margin: 0 }}>
+                &copy; {new Date().getFullYear()} Orient Crockery. Developed & Managed by <a href="https://automatexai.co.in/" target="_blank" rel="noopener noreferrer" style={{ color: "#0f172a", fontWeight: "700", textDecoration: "none" }}>AutomateX</a>
               </p>
             </div>
           </div>
@@ -1191,54 +1719,189 @@ export default function AdminPage() {
   return (
     <div className="erp-page-wrapper" style={{ minHeight: "100vh", backgroundColor: "#f8fafc", margin: 0, padding: 0 }}>
       <div className="erp-page" style={{ 
-        maxWidth: "1400px", 
+        maxWidth: "1440px", 
         margin: "0 auto", 
         backgroundColor: "var(--bg-main)", 
         minHeight: "100vh", 
-        borderLeft: "1px solid #cbd5e1", 
-        borderRight: "1px solid #cbd5e1", 
         boxShadow: "0 0 40px rgba(0,0,0,0.03)",
         position: "relative",
         paddingBottom: "5rem"
       }}>
-        {/* Support floating button */}
+        {/* Floating Support Button */}
         <div style={{
           position: "fixed",
-          bottom: "30px",
-          right: "30px",
-          backgroundColor: "#111",
+          bottom: "24px",
+          left: "24px",
+          backgroundColor: "#0f172a",
           color: "#fff",
-          padding: "12px 20px",
+          padding: "10px 18px",
           borderRadius: "30px",
           display: "flex",
           alignItems: "center",
-          gap: "12px",
-          boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-          zIndex: 999,
-          border: "1px solid #333"
+          gap: "10px",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+          zIndex: 9999,
+          border: "1px solid rgba(255, 255, 255, 0.15)"
         }}>
           <div style={{
-            backgroundColor: "#d4af37",
-            width: "32px",
-            height: "32px",
+            backgroundColor: "#fbbf24",
+            width: "28px",
+            height: "28px",
             borderRadius: "50%",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: "#000",
-            fontSize: "0.9rem"
+            fontSize: "0.85rem"
           }}>
             <i className="fa-solid fa-headset"></i>
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "#aaa", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>Developer Support</div>
-            <div style={{ fontSize: "0.9rem", fontWeight: "600", color: "#fff" }}><a href="tel:+917425016636" style={{ color: "inherit", textDecoration: "none" }}>+91 7425016636</a></div>
-            <div style={{ fontSize: "0.8rem", color: "#888" }}><a href="mailto:support@digifysoft.in" style={{ color: "inherit", textDecoration: "none" }}>support@digifysoft.in</a></div>
+            <div style={{ fontSize: "0.68rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>AutomateX Support</div>
+            <div style={{ fontSize: "0.82rem", fontWeight: "700", color: "#fff" }}>
+              <a href="tel:+917425016636" style={{ color: "inherit", textDecoration: "none" }}>+91 7425016636</a>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Header Console Bar matching Reference Screenshot */}
+        <div style={{
+          backgroundColor: "#0b1329",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+          padding: "14px 6%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px"
+        }}>
+          {/* Left: Developer Badge */}
+          <a 
+            href="https://automatexai.co.in/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              textDecoration: "none",
+              backgroundColor: "rgba(255, 255, 255, 0.06)",
+              padding: "6px 14px",
+              borderRadius: "10px",
+              border: "1px solid rgba(255, 255, 255, 0.12)"
+            }}
+          >
+            <div style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "6px",
+              backgroundColor: "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#ffffff",
+              fontSize: "0.85rem"
+            }}>
+              <i className="fa-solid fa-microchip"></i>
+            </div>
+            <div>
+              <div style={{ fontSize: "0.84rem", fontWeight: "800", color: "#ffffff" }}>AutomateX</div>
+              <div style={{ fontSize: "0.62rem", color: "#38bdf8", fontWeight: "700", textTransform: "uppercase" }}>OFFICIAL DEVELOPER</div>
+            </div>
+          </a>
+
+          {/* Center: Orient Crockeries Admin Console Pill */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            backgroundColor: "#172554",
+            border: "1px solid #1e3a8a",
+            padding: "8px 20px",
+            borderRadius: "30px",
+            boxShadow: "0 0 20px rgba(37, 99, 235, 0.2)"
+          }}>
+            <i className="fa-solid fa-store" style={{ color: "#38bdf8", fontSize: "1rem" }}></i>
+            <span style={{ fontSize: "0.95rem", fontWeight: "800", color: "#ffffff", letterSpacing: "1px" }}>
+              ORIENT CROCKERIES
+            </span>
+            <span style={{
+              backgroundColor: "rgba(255, 255, 255, 0.15)",
+              color: "#93c5fd",
+              fontSize: "0.65rem",
+              fontWeight: "800",
+              padding: "3px 8px",
+              borderRadius: "6px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px"
+            }}>
+              ADMIN CONSOLE
+            </span>
+          </div>
+
+          {/* Right: Status & Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              color: "#34d399",
+              padding: "6px 14px",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: "700"
+            }}>
+              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block", boxShadow: "0 0 8px #10b981" }}></span>
+              LIVE DATABASE
+            </div>
+
+            <Link 
+              href="/" 
+              target="_blank" 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                backgroundColor: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                color: "#f8fafc",
+                padding: "6px 14px",
+                borderRadius: "10px",
+                fontSize: "0.82rem",
+                fontWeight: "600",
+                textDecoration: "none"
+              }}
+            >
+              <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: "0.75rem" }}></i>
+              <span>View Store</span>
+            </Link>
+
+            <button 
+              onClick={handleLogout}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                backgroundColor: "#ef4444",
+                border: "none",
+                color: "#ffffff",
+                padding: "6px 14px",
+                borderRadius: "10px",
+                fontSize: "0.82rem",
+                fontWeight: "700",
+                cursor: "pointer"
+              }}
+            >
+              <i className="fa-solid fa-right-from-bracket"></i>
+              <span>Logout</span>
+            </button>
           </div>
         </div>
 
       {/* Header Stats Bar */}
-      <div className="erp-dashboard-header" style={{ padding: "1.5rem 6% 2rem 6%" }}>
+      <div className="erp-dashboard-header" style={{ padding: "1.5rem clamp(14px, 2.5vw, 36px) 2rem clamp(14px, 2.5vw, 36px)" }}>
         <div style={{ 
           display: "flex", 
           justifyContent: "space-between", 
@@ -1403,7 +2066,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="erp-main-section" style={{ padding: "0 6%" }}>
+      <div className="erp-main-section" style={{ padding: "0 clamp(14px, 2.5vw, 36px)" }}>
         {/* Tabs list */}
         <div className="erp-tabs-container">
           <div className="erp-tabs">
@@ -1411,37 +2074,37 @@ export default function AdminPage() {
             className={`tab-btn ${activeTab === "orders" ? "active" : ""}`}
             onClick={() => setActiveTab("orders")}
           >
-            <i className="fa-solid fa-dolly"></i> Orders Queue
+            <i className="fa-solid fa-dolly"></i> <span>Orders Queue</span>
           </button>
           <button 
             className={`tab-btn ${activeTab === "users" ? "active" : ""}`}
             onClick={() => setActiveTab("users")}
           >
-            <i className="fa-solid fa-users"></i> Users & Customers
+            <i className="fa-solid fa-users"></i> <span>Users & Customers</span>
           </button>
           <button 
             className={`tab-btn ${activeTab === "inventory" ? "active" : ""}`}
             onClick={() => setActiveTab("inventory")}
           >
-            <i className="fa-solid fa-boxes-stacked"></i> Inventory Registry
+            <i className="fa-solid fa-boxes-stacked"></i> <span>Inventory Registry</span>
           </button>
           <button 
             className={`tab-btn ${activeTab === "coupons" ? "active" : ""}`}
             onClick={() => setActiveTab("coupons")}
           >
-            <i className="fa-solid fa-ticket"></i> Coupons & Promos
+            <i className="fa-solid fa-ticket"></i> <span>Coupons & Promos</span>
           </button>
           <button 
             className={`tab-btn ${activeTab === "promo-popup" ? "active" : ""}`}
             onClick={() => setActiveTab("promo-popup")}
           >
-            <i className="fa-solid fa-bullhorn"></i> Promo Popup Manager
+            <i className="fa-solid fa-bullhorn"></i> <span>Promo Popup</span>
           </button>
           <button 
             className={`tab-btn ${activeTab === "instructions" ? "active" : ""}`}
             onClick={() => setActiveTab("instructions")}
           >
-            <i className="fa-solid fa-book-open"></i> Help & Instructions
+            <i className="fa-solid fa-headset"></i> <span>Help & Developer Support</span>
           </button>
           </div>
         </div>
@@ -1849,14 +2512,7 @@ export default function AdminPage() {
                         <div style={{ display: "flex", gap: "8px" }}>
                           <button 
                             className="btn btn-outline btn-sm" 
-                            onClick={() => {
-                              const media = getProductMediaUrls(p);
-                              setEditingProduct({ 
-                                ...p,
-                                youtube_url: p.youtube_url || media.youtube_url || "",
-                                instagram_url: p.instagram_url || media.instagram_url || ""
-                              });
-                            }}
+                            onClick={() => handleStartEditProduct(p)}
                           >
                             <i className="fa-regular fa-pen-to-square"></i> Edit
                           </button>
@@ -2112,7 +2768,7 @@ export default function AdminPage() {
                     onChange={(e) => {
                       const files = Array.from(e.target.files);
                       if (files.length > 5) {
-                        alert("Maximum 5 images allowed per product. Only the first 5 images will be selected.");
+                        triggerToast("Maximum 5 images allowed per product. First 5 images selected.", "warning");
                         setSingleUploadImages(files.slice(0, 5));
                       } else {
                         setSingleUploadImages(files);
@@ -2435,14 +3091,30 @@ export default function AdminPage() {
                                 type="button"
                                 title="Delete Image"
                                 onClick={() => {
-                                  if (window.confirm("Remove this image?")) {
-                                    const newImages = currentImages.filter((_, i) => i !== idx);
-                                    setEditingProduct({ 
-                                      ...editingProduct, 
-                                      images: newImages, 
-                                      image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
-                                    });
-                                  }
+                                  setConfirmModal({
+                                    isOpen: true,
+                                    title: "Remove Image",
+                                    message: "Are you sure you want to remove this photo from the product gallery?",
+                                    subMessage: "The image will be removed once you click Save Changes.",
+                                    confirmText: "Remove Image",
+                                    cancelText: "Cancel",
+                                    type: "warning",
+                                    item: {
+                                      image: currentImages[idx],
+                                      name: `Gallery Image #${idx + 1}`
+                                    },
+                                    isLoading: false,
+                                    onConfirm: () => {
+                                      const newImages = currentImages.filter((_, i) => i !== idx);
+                                      setEditingProduct({ 
+                                        ...editingProduct, 
+                                        images: newImages, 
+                                        image: newImages.length > 0 ? newImages[0] : '/placeholder.jpg' 
+                                      });
+                                      setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                      triggerToast("Image removed from gallery", "info");
+                                    }
+                                  });
                                 }}
                                 style={{ 
                                   position: "absolute", top: "4px", right: "4px", background: "#ef4444", 
@@ -2532,12 +3204,12 @@ export default function AdminPage() {
                       const currentCount = editingProduct.images?.length || 0;
                       const availableSlots = 5 - currentCount;
                       if (availableSlots <= 0) {
-                        alert("Maximum limit of 5 images per product reached! Remove an existing image first to upload new ones.");
+                        triggerToast("Maximum limit of 5 images per product reached! Remove an existing image first.", "warning");
                         setSingleUploadImages([]);
                         return;
                       }
                       if (files.length > availableSlots) {
-                        alert(`Maximum 5 images allowed per product. Only the first ${availableSlots} selected image(s) will be uploaded.`);
+                        triggerToast(`Maximum 5 images allowed per product. Only the first ${availableSlots} selected image(s) will be uploaded.`, "warning");
                         setSingleUploadImages(files.slice(0, availableSlots));
                       } else {
                         setSingleUploadImages(files);
@@ -2706,10 +3378,22 @@ export default function AdminPage() {
                             <button 
                               type="button"
                               onClick={() => {
-                                if (window.confirm(`Delete review by ${rev.reviewerName}?`)) {
-                                  const updatedRevs = editingProduct.reviews.filter((_, i) => i !== rIdx);
-                                  setEditingProduct({ ...editingProduct, reviews: updatedRevs });
-                                }
+                                setConfirmModal({
+                                  isOpen: true,
+                                  title: "Delete Customer Review",
+                                  message: `Are you sure you want to delete the review by "${rev.reviewerName}" (${rev.rating}★)?`,
+                                  subMessage: "This review will be permanently removed from this product's page.",
+                                  confirmText: "Delete Review",
+                                  cancelText: "Cancel",
+                                  type: "danger",
+                                  isLoading: false,
+                                  onConfirm: () => {
+                                    const updatedRevs = editingProduct.reviews.filter((_, i) => i !== rIdx);
+                                    setEditingProduct({ ...editingProduct, reviews: updatedRevs });
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                    triggerToast("Review deleted", "info");
+                                  }
+                                });
                               }}
                               style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#ef4444", borderRadius: "4px", padding: "2px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "700" }}
                             >
@@ -3075,82 +3759,214 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Bulk Upload Modal */}
+      {/* Bulk Product Import (JSON) Modal Matching Reference Screenshot */}
       {showBulkUploadModal && (
-        <div className="modal-overlay active" onClick={() => !isBulkUploading && setShowBulkUploadModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px", gridTemplateColumns: "1fr" }}>
-            {!isBulkUploading && (
+        <div className="modal-overlay active" onClick={() => !isJsonImporting && setShowBulkUploadModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "750px", gridTemplateColumns: "1fr", maxHeight: "90vh", overflowY: "auto", borderRadius: "18px" }}>
+            {!isJsonImporting && (
               <button className="modal-close-btn" onClick={() => setShowBulkUploadModal(false)}>
                 <i className="fa-solid fa-xmark"></i>
               </button>
             )}
             
-            <div className="modal-content-side">
-              <span className="modal-meta-label">Advanced Tools</span>
-              <h2 className="modal-title" style={{ fontSize: "1.6rem", marginBottom: "1rem" }}>Bulk Import Products</h2>
+            <div className="modal-content-side" style={{ padding: "1.8rem" }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "1rem" }}>
+                <span style={{ fontSize: "1.4rem", color: "#4318ff", fontWeight: "800" }}>&lt;/&gt;</span>
+                <h2 className="modal-title" style={{ fontSize: "1.5rem", margin: 0, fontWeight: "800", color: "#0f172a" }}>
+                  Bulk Product Import (JSON)
+                </h2>
+              </div>
               
-              <div style={{ background: "rgba(184, 134, 11, 0.05)", padding: "15px", borderRadius: "8px", border: "1px dashed var(--primary)", marginBottom: "1.5rem" }}>
-                <h4 style={{ margin: "0 0 10px 0", color: "var(--dark)", fontSize: "1rem" }}><i className="fa-solid fa-circle-info" style={{ color: "var(--primary)" }}></i> Instructions</h4>
-                <ol style={{ margin: 0, paddingLeft: "20px", fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: "1.6" }}>
-                  <li>Name your product images exactly as their SKU IDs (e.g. <b>201.jpg</b> or <b>201.png</b>).</li>
-                  <li>Select all your images at once in Step 1. The system will automatically compress them and upload them.</li>
-                  <li>Select your formatted CSV file in Step 2.</li>
-                  <li>Click "Start Bulk Import". Please do not close the window while it is uploading.</li>
-                </ol>
-              </div>
-
-              <div className="form-group full-width" style={{ marginBottom: "1.5rem" }}>
-                <label className="form-label">Step 1: Upload Images (Multiple allowed)</label>
-                <div style={{ border: "1px solid var(--border)", padding: "10px", borderRadius: "8px", background: "var(--bg-surface)" }}>
-                  <input 
-                    type="file" 
-                    multiple 
-                    accept="image/png, image/jpeg, image/jpg"
-                    onChange={(e) => setBulkImages(Array.from(e.target.files))}
-                    disabled={isBulkUploading}
-                    style={{ width: "100%", fontSize: "0.9rem" }}
-                  />
-                  {bulkImages.length > 0 && (
-                    <p style={{ margin: "5px 0 0 0", fontSize: "0.8rem", color: "var(--primary)", fontWeight: "600" }}>
-                      {bulkImages.length} image(s) selected for auto-compression.
-                    </p>
-                  )}
+              {/* Helpful Information Notice Box */}
+              <div style={{ 
+                background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)", 
+                padding: "14px 18px", 
+                borderRadius: "12px", 
+                border: "1px solid #bbf7d0", 
+                marginBottom: "1.2rem",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "12px"
+              }}>
+                <i className="fa-solid fa-boxes-stacked" style={{ color: "#16a34a", fontSize: "1.2rem", marginTop: "3px" }}></i>
+                <div>
+                  <h4 style={{ margin: "0 0 4px 0", color: "#166534", fontSize: "0.92rem", fontWeight: "700" }}>
+                    Fast Structured Bulk Importer
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.82rem", color: "#374151", lineHeight: "1.5" }}>
+                    Paste a structured JSON array below to quickly create or update catalog products. You can leave default/placeholder images now, and easily upload high-resolution photos individually anytime by clicking <b>"Edit"</b> on any product row.
+                  </p>
                 </div>
               </div>
 
-              <div className="form-group full-width" style={{ marginBottom: "2rem" }}>
-                <label className="form-label">Step 2: Upload CSV File</label>
-                <div style={{ border: "1px solid var(--border)", padding: "10px", borderRadius: "8px", background: "var(--bg-surface)" }}>
-                  <input 
-                    type="file" 
-                    accept=".csv"
-                    onChange={(e) => setBulkCsvFile(e.target.files[0])}
-                    disabled={isBulkUploading}
-                    style={{ width: "100%", fontSize: "0.9rem" }}
-                  />
-                  {bulkCsvFile && (
-                    <p style={{ margin: "5px 0 0 0", fontSize: "0.8rem", color: "var(--primary)", fontWeight: "600" }}>
-                      {bulkCsvFile.name} ready for import.
-                    </p>
+              {/* Action Bar above Textarea */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ fontSize: "0.86rem", fontWeight: "700", color: "#334155" }}>
+                    Paste JSON Array Below:
+                  </label>
+                  {jsonValidationResult?.valid && (
+                    <span style={{ backgroundColor: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: "12px", fontSize: "0.72rem", fontWeight: "700" }}>
+                      ✓ {jsonValidationResult.count} Products Ready
+                    </span>
                   )}
+                </div>
+
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button 
+                    type="button"
+                    onClick={handleAutoFixJson}
+                    title="Automatically fix missing quotes, empty values, or trailing commas"
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #86efac",
+                      padding: "6px 14px",
+                      borderRadius: "8px",
+                      fontSize: "0.8rem",
+                      fontWeight: "700",
+                      color: "#166534",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    <i className="fa-solid fa-wand-magic-sparkles" style={{ color: "#16a34a" }}></i>
+                    <span>Auto-Fix & Format JSON</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={handleCopySampleJson}
+                    style={{
+                      background: "#f1f5f9",
+                      border: "1px solid #cbd5e1",
+                      padding: "6px 14px",
+                      borderRadius: "8px",
+                      fontSize: "0.8rem",
+                      fontWeight: "700",
+                      color: "#334155",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    <i className="fa-regular fa-copy" style={{ color: "#4318ff" }}></i>
+                    <span>Copy Sample JSON Template</span>
+                  </button>
                 </div>
               </div>
 
-              {bulkUploadStatus && (
-                <div style={{ padding: "10px", marginBottom: "1rem", borderRadius: "4px", background: "var(--bg-main)", border: "1px solid var(--border)", fontSize: "0.85rem", textAlign: "center" }}>
-                  {isBulkUploading ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: "8px", color: "var(--primary)" }}></i> : null}
-                  {bulkUploadStatus}
+              {/* JSON Textarea Editor */}
+              <div style={{ position: "relative", marginBottom: "1rem" }}>
+                <textarea 
+                  rows={11}
+                  value={jsonInputText}
+                  onChange={(e) => {
+                    setJsonInputText(e.target.value);
+                    setJsonValidationResult(null);
+                  }}
+                  placeholder={`[\n  {\n    "name": "Orient Royal Dinner Set",\n    "department": "Crockery & Dining",\n    "category": "Dinner Sets",\n    "price": 3499,\n    "stock": 25,\n    "fragile": true,\n    "microwave": false,\n    "barcode": "890123456789",\n    "hsn": "6911",\n    "gst": 18,\n    "description": "Handcrafted luxury bone china dinner collection.",\n    "image": "/placeholder.jpg"\n  }\n]`}
+                  style={{
+                    width: "100%",
+                    fontFamily: "'Fira Code', 'Consolas', monospace",
+                    fontSize: "0.84rem",
+                    lineHeight: "1.5",
+                    padding: "14px",
+                    borderRadius: "10px",
+                    border: jsonValidationResult?.valid === false ? "1.5px solid #ef4444" : (jsonValidationResult?.valid ? "1.5px solid #10b981" : "1.5px solid #cbd5e1"),
+                    backgroundColor: "#0f172a",
+                    color: "#f8fafc",
+                    outline: "none",
+                    resize: "vertical"
+                  }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px", fontSize: "0.76rem", color: "#64748b" }}>
+                  <span>💡 <b>Field Tip:</b> All fields are optional except for basic product info. You can omit <code>"image"</code> or write <code>""</code>.</span>
+                  <span>Click <b>"Auto-Fix & Format"</b> if any formatting error occurs.</span>
+                </div>
+              </div>
+
+              {/* Validation Status Notice */}
+              {jsonValidationResult && (
+                <div style={{
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  fontSize: "0.82rem",
+                  marginBottom: "1.2rem",
+                  backgroundColor: jsonValidationResult.valid ? "#ecfdf5" : "#fef2f2",
+                  border: jsonValidationResult.valid ? "1px solid #a7f3d0" : "1px solid #fecaca",
+                  color: jsonValidationResult.valid ? "#065f46" : "#991b1b",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}>
+                  <i className={`fa-solid ${jsonValidationResult.valid ? "fa-circle-check" : "fa-circle-exclamation"}`}></i>
+                  <span>{jsonValidationResult.valid ? `JSON is valid! ${jsonValidationResult.count} products will be inserted/updated in Supabase.` : jsonValidationResult.error}</span>
                 </div>
               )}
 
-              <button 
-                className="btn btn-primary btn-full" 
-                onClick={handleBulkUploadSubmit}
-                disabled={isBulkUploading || !bulkCsvFile}
-                style={{ opacity: (isBulkUploading || !bulkCsvFile) ? 0.6 : 1 }}
-              >
-                {isBulkUploading ? "Processing..." : "Start Bulk Import"}
-              </button>
+              {/* Action Buttons */}
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button 
+                  type="button" 
+                  onClick={handleValidateJson}
+                  style={{
+                    padding: "12px 20px",
+                    borderRadius: "10px",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#334155",
+                    fontWeight: "700",
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}
+                >
+                  <i className="fa-regular fa-eye"></i>
+                  <span>Validate & Preview JSON</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleImportJsonToSupabase}
+                  disabled={isJsonImporting}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "10px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                    color: "#ffffff",
+                    fontWeight: "800",
+                    fontSize: "0.92rem",
+                    cursor: isJsonImporting ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    boxShadow: "0 4px 14px rgba(5, 150, 105, 0.35)",
+                    opacity: isJsonImporting ? 0.7 : 1
+                  }}
+                >
+                  {isJsonImporting ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin"></i>
+                      <span>Importing to Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-cloud-arrow-up"></i>
+                      <span>Import JSON to Supabase</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
@@ -3173,36 +3989,72 @@ export default function AdminPage() {
           alignItems: "center",
           gap: "14px",
           backgroundColor: "rgba(15, 23, 42, 0.95)",
-          backdropFilter: "blur(12px)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
           color: "#ffffff",
           padding: "14px 22px",
-          borderRadius: "14px",
-          border: "1px solid rgba(217, 119, 6, 0.4)",
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(217, 119, 6, 0.2)",
+          borderRadius: "16px",
+          border: toastType === "success" 
+            ? "1px solid rgba(16, 185, 129, 0.4)" 
+            : (toastType === "error" 
+                ? "1px solid rgba(239, 68, 68, 0.4)" 
+                : (toastType === "warning" 
+                    ? "1px solid rgba(245, 158, 11, 0.4)" 
+                    : "1px solid rgba(67, 24, 255, 0.4)")),
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(0, 0, 0, 0.2)",
           maxWidth: "480px",
+          animation: showToast ? "adminConfirmFadeIn 0.3s ease" : "none",
           transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
         }}
       >
         <div style={{
-          width: "36px",
-          height: "36px",
-          minWidth: "36px",
+          width: "38px",
+          height: "38px",
+          minWidth: "38px",
           borderRadius: "50%",
-          backgroundColor: "rgba(217, 119, 6, 0.2)",
-          border: "1px solid rgba(217, 119, 6, 0.6)",
+          backgroundColor: toastType === "success" 
+            ? "rgba(16, 185, 129, 0.2)" 
+            : (toastType === "error" 
+                ? "rgba(239, 68, 68, 0.2)" 
+                : (toastType === "warning" 
+                    ? "rgba(245, 158, 11, 0.2)" 
+                    : "rgba(67, 24, 255, 0.2)")),
+          border: toastType === "success" 
+            ? "1px solid rgba(16, 185, 129, 0.6)" 
+            : (toastType === "error" 
+                ? "1px solid rgba(239, 68, 68, 0.6)" 
+                : (toastType === "warning" 
+                    ? "1px solid rgba(245, 158, 11, 0.6)" 
+                    : "1px solid rgba(67, 24, 255, 0.6)")),
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#fbbf24",
+          color: toastType === "success" 
+            ? "#34d399" 
+            : (toastType === "error" 
+                ? "#f87171" 
+                : (toastType === "warning" 
+                    ? "#fbbf24" 
+                    : "#818cf8")),
           fontSize: "1.1rem"
         }}>
-          <i className="fa-solid fa-bell-concierge"></i>
+          {toastType === "success" && <i className="fa-solid fa-circle-check"></i>}
+          {toastType === "error" && <i className="fa-solid fa-circle-xmark"></i>}
+          {toastType === "warning" && <i className="fa-solid fa-triangle-exclamation"></i>}
+          {toastType === "info" && <i className="fa-solid fa-bell-concierge"></i>}
         </div>
         <div style={{ flexGrow: 1 }}>
-          <div style={{ fontSize: "0.75rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px", color: "#fbbf24", marginBottom: "2px" }}>
-            Orient System Alert
+          <div style={{ 
+            fontSize: "0.72rem", 
+            fontWeight: "700", 
+            textTransform: "uppercase", 
+            letterSpacing: "1px", 
+            color: toastType === "success" ? "#34d399" : (toastType === "error" ? "#f87171" : (toastType === "warning" ? "#fbbf24" : "#818cf8")),
+            marginBottom: "2px" 
+          }}>
+            {toastType === "success" ? "Operation Successful" : (toastType === "error" ? "System Error" : (toastType === "warning" ? "Notice" : "Orient System Alert"))}
           </div>
-          <div style={{ fontSize: "0.9rem", fontWeight: "500", color: "#f8fafc", lineHeight: "1.4" }}>
+          <div style={{ fontSize: "0.88rem", fontWeight: "500", color: "#f8fafc", lineHeight: "1.4" }}>
             {toastMessage}
           </div>
         </div>
@@ -3394,6 +4246,21 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Global Luxury Admin Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        subMessage={confirmModal.subMessage}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        type={confirmModal.type}
+        item={confirmModal.item}
+        isLoading={confirmModal.isLoading}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
     </div>
   );
 }

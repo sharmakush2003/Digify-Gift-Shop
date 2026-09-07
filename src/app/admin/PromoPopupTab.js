@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
+import ConfirmModal from "./ConfirmModal";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -19,6 +20,7 @@ const DEFAULT_CONFIG = {
 export default function PromoPopupTab() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [message, setMessage] = useState("");
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   const loadPromoConfig = async () => {
     try {
@@ -74,14 +76,17 @@ export default function PromoPopupTab() {
     }
   };
 
+  const executeReset = () => {
+    setConfig(DEFAULT_CONFIG);
+    localStorage.setItem("orient_promo_popup_config", JSON.stringify(DEFAULT_CONFIG));
+    window.dispatchEvent(new Event("orient_promo_config_updated"));
+    setShowConfirmReset(false);
+    setMessage("✓ Reset to default settings successfully.");
+    setTimeout(() => setMessage(""), 3500);
+  };
+
   const handleReset = () => {
-    if (window.confirm("Reset Popup configuration to default settings?")) {
-      setConfig(DEFAULT_CONFIG);
-      localStorage.setItem("orient_promo_popup_config", JSON.stringify(DEFAULT_CONFIG));
-      window.dispatchEvent(new Event("orient_promo_config_updated"));
-      setMessage("Reset to default settings.");
-      setTimeout(() => setMessage(""), 3000);
-    }
+    setShowConfirmReset(true);
   };
 
   return (
@@ -117,7 +122,7 @@ export default function PromoPopupTab() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "25px", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "25px", alignItems: "start" }}>
         
         {/* CONFIG FORM */}
         <form onSubmit={handleSave} style={{ background: "#ffffff", padding: "1.5rem", borderRadius: "12px", border: "1.5px solid #cbd5e1", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
@@ -323,6 +328,19 @@ export default function PromoPopupTab() {
         </div>
 
       </div>
+
+      {/* Luxury Confirm Modal for Reset Action */}
+      <ConfirmModal
+        isOpen={showConfirmReset}
+        onClose={() => setShowConfirmReset(false)}
+        onConfirm={executeReset}
+        title="Reset Popup Configuration"
+        message="Are you sure you want to reset the front-end promotional banner popup to its factory default settings?"
+        subMessage="This will replace current headlines, coupon codes, and banner images with defaults."
+        confirmText="Reset Configuration"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   );
 }
