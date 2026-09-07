@@ -218,11 +218,13 @@ function CatalogContent() {
     const meta = getProductMeta(product);
 
     // Search filter
-    const matchesSearch = !searchTerm.trim() || 
-                          product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          meta.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          meta.collection.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !term || 
+                          (product.name && product.name.toLowerCase().includes(term)) || 
+                          (product.category && product.category.toLowerCase().includes(term)) ||
+                          (meta.brand && meta.brand.toLowerCase().includes(term)) ||
+                          (meta.collection && meta.collection.toLowerCase().includes(term)) ||
+                          (product.search_tags && product.search_tags.toLowerCase().includes(term)) ||
                           (product.barcode && product.barcode.includes(searchTerm));
     
     // Wishlist-only filter
@@ -564,7 +566,7 @@ function CatalogContent() {
             <input 
               type="text" 
               className="search-input" 
-              placeholder="Search by product name, department, or category..."
+              placeholder="Search by product name, keywords, tags, or category..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

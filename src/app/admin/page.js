@@ -148,6 +148,7 @@ export default function AdminPage() {
     fragile: false,
     microwave: false,
     category: "General",
+    search_tags: "",
     video_enabled: false,
     youtube_url: "",
     instagram_url: ""
@@ -454,6 +455,7 @@ export default function AdminPage() {
         description: newProduct.description,
         fragile: newProduct.fragile,
         microwave: newProduct.microwave,
+        search_tags: newProduct.search_tags || '',
         video_enabled: Boolean(newProduct.video_enabled),
         youtube_url: newProduct.video_enabled ? (newProduct.youtube_url || '') : '',
         instagram_url: newProduct.video_enabled ? (newProduct.instagram_url || '') : '',
@@ -469,6 +471,8 @@ export default function AdminPage() {
       setNewProduct({
         name: "", price: "", stock: "", stockStatus: "Available", department: "Crockery & Dining",
         barcode: "", hsn: "", gst: 18, description: "", fragile: false, microwave: false, category: "General",
+        search_tags: "",
+        video_enabled: false,
         youtube_url: "", instagram_url: ""
       });
       setSingleUploadImages([]);
@@ -558,6 +562,7 @@ export default function AdminPage() {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
         setEditingProduct({ 
           ...p,
+          search_tags: p.search_tags || "",
           youtube_url: p.youtube_url || media.youtube_url || "",
           instagram_url: p.instagram_url || media.instagram_url || ""
         });
@@ -786,8 +791,9 @@ export default function AdminPage() {
   // Filters for products inventory
   const filteredProducts = productsList.filter(p => 
     p.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-    p.barcode.includes(inventorySearch) ||
-    p.category.toLowerCase().includes(inventorySearch.toLowerCase())
+    (p.barcode && p.barcode.includes(inventorySearch)) ||
+    (p.category && p.category.toLowerCase().includes(inventorySearch.toLowerCase())) ||
+    (p.search_tags && p.search_tags.toLowerCase().includes(inventorySearch.toLowerCase()))
   );
 
   // Edit stock update
@@ -839,6 +845,7 @@ export default function AdminPage() {
       gst: parseFloat(editingProduct.gst) || 18,
       rating,
       reviewCount: reviews.length,
+      search_tags: editingProduct.search_tags || '',
       video_enabled: Boolean(editingProduct.video_enabled),
       youtube_url: editingProduct.video_enabled ? (editingProduct.youtube_url || '') : '',
       instagram_url: editingProduct.video_enabled ? (editingProduct.instagram_url || '') : '',
@@ -1180,6 +1187,7 @@ export default function AdminPage() {
           rating: parseFloat(item.rating) || 5.0,
           reviewCount: parseInt(item.reviewCount) || 0,
           reviews: Array.isArray(item.reviews) ? item.reviews : [],
+          search_tags: item.search_tags || "",
           image: img,
           images: imgs,
           warranty: item.warranty || "1 Year Brand Warranty"
@@ -2947,6 +2955,22 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Search Tags / Keywords</span>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "normal" }}>Comma-separated</span>
+                  </span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="e.g. mug, blue, cup, premium, ceramic, handmade"
+                    value={newProduct.search_tags || ""}
+                    onChange={(e) => setNewProduct({ ...newProduct, search_tags: e.target.value })}
+                  />
+                  <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    Keywords help customers discover this product when searching in the catalog.
+                  </span>
+                </div>
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
                   <div style={{ background: "#eff6ff", padding: "8px 12px", borderRadius: "8px", border: "1px solid #bfdbfe", marginBottom: "8px", fontSize: "0.8rem", color: "#1e40af" }}>
                     <i className="fa-solid fa-circle-info" style={{ marginRight: "6px" }}></i>
                     <b>Notice:</b> You can add a <b>maximum of 5 images</b> per product.
@@ -3121,6 +3145,23 @@ export default function AdminPage() {
                     onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
                     style={{ resize: "vertical", width: "100%" }}
                   />
+                </div>
+
+                <div className="form-group full-width" style={{ marginTop: "10px" }}>
+                  <span className="form-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Search Tags / Keywords</span>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "normal" }}>Comma-separated</span>
+                  </span>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="e.g. mug, blue, cup, premium, ceramic, handmade"
+                    value={editingProduct.search_tags || ""}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, search_tags: e.target.value })}
+                  />
+                  <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    Keywords help customers discover this product when searching in the catalog.
+                  </span>
                 </div>
 
                 <div className="form-group">

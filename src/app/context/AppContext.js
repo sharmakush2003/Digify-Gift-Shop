@@ -56,6 +56,7 @@ export function AppProvider({ children }) {
             }
             return {
               ...p,
+              search_tags: p.search_tags || '',
               warranty: warrantyVal || "No Warranty",
               youtube_url: p.youtube_url || media.youtube_url || '',
               instagram_url: p.instagram_url || media.instagram_url || ''
