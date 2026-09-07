@@ -135,11 +135,31 @@ export default function Navbar() {
               <Link href="/catalog" onClick={closeDrawer} style={{ flex: 1 }}>Shop Dining</Link>
               <i className="fa-solid fa-chevron-down dropdown-icon"></i>
             </div>
-            <ul className="nav-dropdown-menu">
-              <li><Link href="/catalog?department=Crockery+%26+Dining" onClick={closeDrawer}>Fine Dining</Link></li>
-              <li><Link href="/catalog?department=Cookware" onClick={closeDrawer}>Professional Cookware</Link></li>
-              <li><Link href="/catalog?department=Woodcraft" onClick={closeDrawer}>Organic Woodcraft</Link></li>
-              <li><Link href="/catalog?category=Gift+Sets" onClick={closeDrawer}>Bespoke Gifting</Link></li>
+            <ul className="nav-dropdown-menu custom-mega-dropdown">
+              <li>
+                <Link href="/catalog?department=Crockery+%26+Dining" onClick={closeDrawer}>
+                  <i className="fa-solid fa-utensils" style={{ color: '#e67e22', width: '24px', textAlign: 'center', marginRight: '10px' }}></i>
+                  <span>Fine Dining</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/catalog?department=Cookware" onClick={closeDrawer}>
+                  <i className="fa-solid fa-kitchen-set" style={{ color: '#3498db', width: '24px', textAlign: 'center', marginRight: '10px' }}></i>
+                  <span>Professional Cookware</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/catalog?department=Woodcraft" onClick={closeDrawer}>
+                  <i className="fa-solid fa-tree" style={{ color: '#2ecc71', width: '24px', textAlign: 'center', marginRight: '10px' }}></i>
+                  <span>Organic Woodcraft</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/catalog?category=Gift+Sets" onClick={closeDrawer}>
+                  <i className="fa-solid fa-gift" style={{ color: '#9b59b6', width: '24px', textAlign: 'center', marginRight: '10px' }}></i>
+                  <span>Bespoke Gifting</span>
+                </Link>
+              </li>
             </ul>
           </li>
           <li>

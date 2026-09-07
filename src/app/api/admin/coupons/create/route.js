@@ -2,20 +2,42 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rppakudcmvwlkcxjhnfn.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_AUO4h2oUniw9oE4moZm3kw_HHjziI09';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_AUO4h2oUniw9oE4moZm3kw_HHjziI09';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+async function verifyAdminSession(request) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.replace('Bearer ', '').trim();
+  if (!token) return null;
+
+  const supabaseAuthClient = createClient(supabaseUrl, supabaseAnonKey);
+  const { data: { user }, error } = await supabaseAuthClient.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: userData, error: roleError } = await supabaseAdmin
+    .from('users').select('role').eq('id', user.id).single();
+  if (roleError || !userData || userData.role !== 'admin') return null;
+
+  return user;
+}
 
 export async function POST(request) {
   try {
+    const adminUser = await verifyAdminSession(request);
+    if (!adminUser) {
+      return NextResponse.json({ success: false, message: 'Unauthorized. Admin access required.' }, { status: 401 });
+    }
+
     const payload = await request.json();
-    
-    let { data, error } = await supabase.from('coupons').insert([payload]).select();
+
+    let { data, error } = await supabaseAdmin.from('coupons').insert([payload]).select();
 
     // If is_additive column doesn't exist in Supabase DB schema, fallback without it
     if (error && error.message.includes('is_additive')) {
       delete payload.is_additive;
-      const res = await supabase.from('coupons').insert([payload]).select();
+      const res = await supabaseAdmin.from('coupons').insert([payload]).select();
       error = res.error;
       data = res.data;
     }

@@ -205,37 +205,30 @@ export default function AdminPage() {
     }
     
     try {
-      let ordersSource = [];
-      // Try relational query first
-      let { data: relationalData, error: relError } = await supabase.from('orders').select('*, order_items(*, products(*))');
-      
-      if (relError) {
-        console.warn("Relational fetch failed, falling back to manual merge.", relError);
-        // Fallback: Fetch orders and order_items separately, then merge
-        const { data: simpleOrders, error: simErr } = await supabase.from('orders').select('*');
-        if (!simErr && simpleOrders) {
-          const { data: simpleItems } = await supabase.from('order_items').select('*');
-          const { data: productsData } = await supabase.from('products').select('*');
-          
-          ordersSource = simpleOrders.map(order => {
-            const itemsForOrder = (simpleItems || []).filter(item => item.order_id === order.id);
-            // Manually inject product details into items
-            const populatedItems = itemsForOrder.map(item => {
-              const product = (productsData || []).find(p => String(p.id) === String(item.product_id));
-              return {
-                ...item,
-                products: product || null
-              };
-            });
-            return {
-              ...order,
-              order_items: populatedItems
-            };
-          });
-        }
-      } else {
-        ordersSource = relationalData || [];
+      // Fetch orders via secure server-side API (uses service-role key after verifying admin session)
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        console.warn('No admin session token found — skipping orders fetch.');
+        setOrdersList([]);
+        return;
       }
+
+      const ordersResponse = await fetch('/api/admin/orders', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const ordersResult = await ordersResponse.json();
+      if (!ordersResult.success) {
+        console.warn('Admin orders API error:', ordersResult.message);
+        setOrdersList([]);
+        return;
+      }
+      const ordersSource = ordersResult.orders || [];
+
 
       let dbOrdersFormatted = ordersSource.map(dbOrder => {
         const nameFromAddr = typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : null;
@@ -572,6 +565,58 @@ export default function AdminPage() {
     });
   };
 
+  const recoverTrappedOrders = async () => {
+    if (typeof window === 'undefined') return;
+    const trappedStr = localStorage.getItem("orient_orders");
+    if (!trappedStr) {
+      alert("No trapped orders found in this browser's local storage.");
+      return;
+    }
+    try {
+      const trappedOrders = JSON.parse(trappedStr);
+      if (!Array.isArray(trappedOrders) || trappedOrders.length === 0) {
+         alert("No trapped orders found.");
+         return;
+      }
+      
+      const confirmSync = window.confirm(`Found ${trappedOrders.length} orders in this browser's local storage. Do you want to sync them to the live database now?`);
+      if (!confirmSync) return;
+
+      triggerToast(`Starting sync for ${trappedOrders.length} orders... Please wait.`, "info");
+      let successCount = 0;
+      let skipCount = 0;
+
+      for (const order of trappedOrders) {
+        // Skip if already in live database
+        if (ordersList.some(o => o.id === order.id || o.id === order.order_number)) {
+          skipCount++;
+          continue;
+        }
+
+        const payload = {
+            order: order,
+            method: order.paymentId === 'COD' ? 'COD' : 'Online'
+        };
+
+        const res = await fetch('/api/orders/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success || (data.message && data.message.includes("duplicate key"))) {
+            successCount++;
+        }
+      }
+      
+      alert(`Sync Complete! Successfully added ${successCount} new orders to the live database. (Skipped ${skipCount} already existing orders).`);
+      loadDbData();
+    } catch (e) {
+      console.error(e);
+      alert("Error recovering orders: " + e.message);
+    }
+  };
+
   const handleProcessOrder = async (orderId, nextStatus, docId) => {
     let otpGenerated = null;
     try {
@@ -582,10 +627,17 @@ export default function AdminPage() {
       // Optimistically update the UI to prevent perceived unresponsiveness
       setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, courierStatus, paymentStatus } : o));
 
+      // Get session token for admin API authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       // Call secure server-side API to update database permanently
       const response = await fetch('/api/admin/orders/update-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           orderId,
           nextStatus,
@@ -2144,6 +2196,26 @@ export default function AdminPage() {
                   <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: "4px 0 0 0" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
                 </div>
                 <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <button 
+                    className="btn btn-primary btn-sm" 
+                    onClick={recoverTrappedOrders}
+                    title="Recover missing orders trapped in this browser"
+                    style={{ 
+                      height: '40px', 
+                      padding: '0 16px',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '8px',
+                      fontWeight: '600',
+                      backgroundColor: '#ef4444',
+                      borderColor: '#ef4444',
+                      color: 'white'
+                    }}
+                  >
+                    <i className="fa-solid fa-cloud-arrow-up"></i> Sync Local Orders
+                  </button>
                   <button 
                     className="btn btn-outline btn-sm" 
                     onClick={loadDbData}

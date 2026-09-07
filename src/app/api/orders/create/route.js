@@ -89,28 +89,16 @@ export async function POST(request) {
 
     let { data: orderData, error } = await supabase.from("orders").insert(dbOrder).select().single();
     
-    // We ignore error for demo if coupon_id column missing, as we can't do RPC reliably
     if (error && error.message.includes('coupon_id')) {
         delete dbOrder.coupon_id;
         const retry = await supabase.from("orders").insert(dbOrder).select().single();
-        if(retry.error) {
-           if (retry.error.message.includes('row-level security')) {
-              console.log('RLS error on retry, mocking order creation for demo');
-              Object.assign(orderData || {}, { id: orderId, ...dbOrder });
-           } else {
-              throw retry.error;
-           }
+        if (retry.error) {
+           throw retry.error; // Surface all errors clearly — no silent mock fallback
         } else {
-           Object.assign(orderData || {}, retry.data);
+           orderData = retry.data;
         }
     } else if (error) {
-        if (error.message.includes('row-level security')) {
-            console.log('RLS error, mocking order creation for demo');
-            const mockOrder = { id: orderId, ...dbOrder };
-            orderData = mockOrder;
-        } else {
-            throw error;
-        }
+        throw error; // Surface all errors clearly — no silent mock fallback
     }
 
     if (items && items.length > 0 && orderData) {

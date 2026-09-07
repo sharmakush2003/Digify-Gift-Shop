@@ -46,9 +46,14 @@ export default function CouponsTab() {
     };
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const response = await fetch('/api/admin/coupons/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload)
       });
       
@@ -75,9 +80,14 @@ export default function CouponsTab() {
     setCoupons(prev => prev.map(c => c.id === id ? { ...c, is_active: newStatus } : c));
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const response = await fetch('/api/admin/coupons/toggle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ id, is_active: newStatus })
       });
 
