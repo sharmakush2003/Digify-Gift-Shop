@@ -35,6 +35,8 @@ export default function AdminPage() {
   const [orderFilter, setOrderFilter] = useState("Active"); // "Active" | "Delivered" | "All"
   const [orderSearch, setOrderSearch] = useState("");
   const [inventorySearch, setInventorySearch] = useState("");
+  const [ordersCurrentPage, setOrdersCurrentPage] = useState(1);
+  const [ordersPerPage, setOrdersPerPage] = useState(10);
 
   // Data states (locally stored)
   const [productsList, setProductsList] = useState([]);
@@ -203,15 +205,39 @@ export default function AdminPage() {
     }
     
     try {
-      const localOrders = getOrders();
-      const { data, error } = await supabase.from('orders').select('*, order_items(*, products(*))');
-      let ordersSource = data;
-      if (error || !ordersSource || ordersSource.length === 0) {
-        const { data: simpleData } = await supabase.from('orders').select('*');
-        ordersSource = simpleData || [];
+      let ordersSource = [];
+      // Try relational query first
+      let { data: relationalData, error: relError } = await supabase.from('orders').select('*, order_items(*, products(*))');
+      
+      if (relError) {
+        console.warn("Relational fetch failed, falling back to manual merge.", relError);
+        // Fallback: Fetch orders and order_items separately, then merge
+        const { data: simpleOrders, error: simErr } = await supabase.from('orders').select('*');
+        if (!simErr && simpleOrders) {
+          const { data: simpleItems } = await supabase.from('order_items').select('*');
+          const { data: productsData } = await supabase.from('products').select('*');
+          
+          ordersSource = simpleOrders.map(order => {
+            const itemsForOrder = (simpleItems || []).filter(item => item.order_id === order.id);
+            // Manually inject product details into items
+            const populatedItems = itemsForOrder.map(item => {
+              const product = (productsData || []).find(p => String(p.id) === String(item.product_id));
+              return {
+                ...item,
+                products: product || null
+              };
+            });
+            return {
+              ...order,
+              order_items: populatedItems
+            };
+          });
+        }
+      } else {
+        ordersSource = relationalData || [];
       }
 
-      let ordersData = ordersSource ? ordersSource.map(dbOrder => {
+      let dbOrdersFormatted = ordersSource.map(dbOrder => {
         const nameFromAddr = typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.name : null;
         const custName = nameFromAddr || dbOrder.customer_name || dbOrder.name || (dbOrder.guest_email ? dbOrder.guest_email.split('@')[0] : 'Customer');
         const custPhone = dbOrder.guest_phone || (typeof dbOrder.shipping_address === 'object' ? dbOrder.shipping_address?.phone : null) || dbOrder.phone || 'N/A';
@@ -219,9 +245,6 @@ export default function AdminPage() {
                          (dbOrder.shipping_address?.raw_text && dbOrder.shipping_address.raw_text.toLowerCase().includes('pickup')) ||
                          dbOrder.delivery_method === 'pickup';
 
-        // Match local items from local storage if order_items missing
-        const localMatch = localOrders.find(lo => lo.id === dbOrder.order_number || lo.id === dbOrder.id || lo.order_number === dbOrder.order_number);
-        
         let extractedItems = [];
         if (dbOrder.order_items && dbOrder.order_items.length > 0) {
           extractedItems = dbOrder.order_items.map(i => ({
@@ -231,10 +254,7 @@ export default function AdminPage() {
           }));
         } else if (dbOrder.items && dbOrder.items.length > 0) {
           extractedItems = dbOrder.items;
-        } else if (localMatch && localMatch.items && localMatch.items.length > 0) {
-          extractedItems = localMatch.items;
         } else {
-          // Guarantee item details are displayed for every single order
           const itemPrice = dbOrder.final_total || dbOrder.total_mrp || 875;
           extractedItems = [{
             name: "Orient Crockery Premium Luxury Dinner Collection",
@@ -257,15 +277,15 @@ export default function AdminPage() {
           discount: dbOrder.discount_amount || 0,
           total: dbOrder.final_total || 0,
           status: (dbOrder.order_status === 'NEW' || dbOrder.order_status === 'PAYMENT_PENDING') ? 'Pending' : (dbOrder.order_status === 'PACKED' ? 'Packed' : (dbOrder.order_status === 'DISPATCHED' ? 'Shipped' : (dbOrder.order_status === 'DELIVERED' ? 'Delivered' : 'Pending'))),
-          courierStatus: isPickup ? 'Store Self Pickup' : 'In Warehouse'
+          courierStatus: isPickup ? 'Store Self Pickup' : 'In Warehouse',
+          paymentStatus: dbOrder.payment_status === 'SUCCESS' ? 'Paid' : 'Pending'
         };
-      }) : [];
-      
-      // Sort orders by date
-      ordersData.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
-      
-      // Auto-trigger sound chime & toast popup if a new order was created recently (within last 3 minutes)
-      const newestOrder = ordersData[0];
+      });
+
+      let allOrders = [...dbOrdersFormatted];
+      allOrders.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+      const newestOrder = allOrders[0];
       if (newestOrder && newestOrder.date) {
         const orderTime = new Date(newestOrder.date).getTime();
         const THREE_MINUTES = 3 * 60 * 1000;
@@ -275,12 +295,11 @@ export default function AdminPage() {
           playOrderChime();
         }
       }
-      prevOrdersCountRef.current = ordersData.length;
+      prevOrdersCountRef.current = allOrders.length;
+      setOrdersList(allOrders);
 
-      setOrdersList(ordersData);
     } catch (e) {
       console.warn("Failed to load orders from Supabase", e);
-      // Removed fallback to getOrders() so only real database data or nothing is shown
       setOrdersList([]);
     }
   };
@@ -332,26 +351,30 @@ export default function AdminPage() {
     }
     loadDbData();
 
-    // 1. Ultra-Light Auto-Refresh (Polling every 2 minutes as requested)
+    // 1. Smart 2-Minute Polling (Paused when tab is hidden or minimized)
     const pollInterval = setInterval(() => {
-      loadDbData();
+      if (document.visibilityState === 'visible') {
+        loadDbData();
+      }
     }, 120000);
 
-    // 2. Supabase Realtime WebSockets for instant updates (<100ms)
-    const channel = supabase
-      .channel('realtime-orders-admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+    // 2. Instant Re-sync on Focus (Fetches instantly the moment you click back into the tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
         loadDbData();
-        if (payload.eventType === 'INSERT') {
-          triggerToast("🛎️ New Order Received!");
-          playOrderChime();
-        }
-      })
-      .subscribe();
+      }
+    };
+    const handleFocus = () => {
+      loadDbData();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       clearInterval(pollInterval);
-      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('resize', handleResize);
     };
   }, []);
@@ -550,6 +573,7 @@ export default function AdminPage() {
   };
 
   const handleProcessOrder = async (orderId, nextStatus, docId) => {
+    let otpGenerated = null;
     try {
       const courierStatus = nextStatus === "Packed" ? "In Warehouse" : (nextStatus === "Shipped" ? "In Transit" : "Delivered");
       const currentOrder = ordersList.find(o => o.id === orderId);
@@ -558,58 +582,30 @@ export default function AdminPage() {
       // Optimistically update the UI to prevent perceived unresponsiveness
       setOrdersList(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus, courierStatus, paymentStatus } : o));
 
-      // Handle OTP generation when marking as Shipped
-      let otpGenerated = null;
-      let newShippingAddress = null;
-      
-      const { data: dbRecord } = await supabase.from('orders').select('shipping_address').eq('id', docId).single();
-      if (dbRecord && dbRecord.shipping_address) {
-        newShippingAddress = { ...dbRecord.shipping_address };
-        if (nextStatus === "Shipped" && !newShippingAddress.delivery_otp) {
-          otpGenerated = Math.floor(100000 + Math.random() * 900000).toString();
-          newShippingAddress.delivery_otp = otpGenerated;
-        }
-      }
+      // Call secure server-side API to update database permanently
+      const response = await fetch('/api/admin/orders/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          nextStatus,
+          docId,
+          paymentStatus
+        })
+      });
 
-      const updateData = {
-        order_status: nextStatus === 'Pending' ? 'NEW' : (nextStatus === 'Packed' ? 'PACKED' : (nextStatus === 'Shipped' ? 'DISPATCHED' : 'DELIVERED')),
-        payment_status: paymentStatus === 'SUCCESS' ? 'SUCCESS' : 'PENDING'
-      };
-      
-      if (newShippingAddress) {
-        updateData.shipping_address = newShippingAddress;
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || "Failed to update order status");
       }
-
-      const { error: updateError } = await supabase.from('orders').update(updateData).eq('id', docId);
-      if (updateError) {
-        console.error("Supabase update error:", updateError);
-        throw updateError;
+      if (result.otpGenerated) {
+        otpGenerated = result.otpGenerated;
       }
-
-      // Trigger Google Sheets Webhook Update
-      try {
-        const webhookUrl = "https://script.google.com/macros/s/AKfycbxIM1-jcgl3NUqhoYt7IQIHY9LI6z0IT7c3WI_ZSJwajYORUbgKLnTnw5GJLBbhj-OY8g/exec";
-        await fetch(webhookUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            action: "update",
-            orderId: orderId,
-            status: nextStatus,
-            courierStatus: courierStatus,
-            paymentStatus: paymentStatus
-          })
-        });
-      } catch (err) {
-        console.error("Error syncing update to Google Sheets:", err);
-      }
+      // Re-sync data from DB in background
+      loadDbData();
     } catch (e) {
       console.warn("Failed to update order status in Supabase", e);
       updateOrderStatus(orderId, nextStatus); // Fallback
-      // Revert optimistic update if database actually failed
       loadDbData();
     }
     
@@ -618,7 +614,7 @@ export default function AdminPage() {
     if (nextStatus === "Packed") {
       triggerToast(`📦 Order ${orderId} Packed Successfully! Item wrapped & ready in Warehouse.`);
     } else if (nextStatus === "Shipped") {
-      triggerToast(`🚚 Order ${orderId} Dispatched via BlueDart Courier! OTP: ${otpGenerated || "Generated"}`);
+      triggerToast(`🚚 Order ${orderId} Dispatched to Delivery Partner! OTP: ${otpGenerated || "Generated"}`);
     } else if (nextStatus === "Delivered") {
       triggerToast(`🎉 Order ${orderId} Delivered Successfully! Customer receipt signed.`);
     } else {
@@ -642,9 +638,13 @@ export default function AdminPage() {
   }).length;
 
   const totalOrdersCount = ordersList.length;
-  const activeDispatchesCount = ordersList.filter(o => o.status === "Shipped").length; // Shipped but not delivered
-  const pendingDispatchesCount = ordersList.filter(o => o.status === "Packed").length; // Packed but not shipped
+  // Active Dispatches are warehouse orders requiring action (Pending & Packed)
+  const activeDispatchesCount = ordersList.filter(o => o.status === "Pending" || o.status === "Packed").length;
   const pendingOrdersCount = ordersList.filter(o => o.status === "Pending").length;
+  const packedOrdersCount = ordersList.filter(o => o.status === "Packed").length;
+  const pendingDispatchesCount = packedOrdersCount;
+  const shippedOrdersCount = ordersList.filter(o => o.status === "Shipped").length;
+  const deliveredOrdersCount = ordersList.filter(o => o.status === "Delivered").length;
   const lowStockCount = productsList.filter(p => p.stock < 5).length;
 
   // Cutoff date for recent orders (48 hours ago)
@@ -659,7 +659,7 @@ export default function AdminPage() {
                           (order.customerPhone && order.customerPhone.includes(orderSearch));
     
     const matchesStatus = orderFilter === "All" ||
-                          (orderFilter === "Active" && order.status !== "Delivered") ||
+                          (orderFilter === "Active" && (order.status === "Pending" || order.status === "Packed")) ||
                           (orderFilter === "Pending" && order.status === "Pending") ||
                           (orderFilter === "Packed" && order.status === "Packed") ||
                           (orderFilter === "Shipped" && order.status === "Shipped") ||
@@ -674,6 +674,9 @@ export default function AdminPage() {
     
     return matchesSearch && matchesStatus && matchesDateRange;
   });
+
+  // Paginated orders for clean display (10 per page default)
+  const paginatedOrders = filteredOrders.slice((ordersCurrentPage - 1) * ordersPerPage, ordersCurrentPage * ordersPerPage);
 
   // Dynamic Unique Departments and Categories
   const defaultDepts = ["Crockery & Dining", "Glassware & Barware", "Cookware", "Woodcraft", "Home Décor", "Gifting"];
@@ -2054,18 +2057,18 @@ export default function AdminPage() {
             <div className="metric-card-subtext">Packed, waiting for pickup</div>
           </div>
 
-          {/* Card 7: Active Dispatches (Shipped) */}
+          {/* Card 7: Active Dispatches (Pending & Packed) */}
           <div 
             className="metric-card-pro" 
-            onClick={() => { setActiveTab("orders"); setOrderFilter("Shipped"); }}
-            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Shipped") ? "#4f46e5" : "#e2e8f0" }}
+            onClick={() => { setActiveTab("orders"); setOrderFilter("Active"); setOrdersCurrentPage(1); }}
+            style={{ cursor: "pointer", borderColor: (activeTab === "orders" && orderFilter === "Active") ? "#4f46e5" : "#e2e8f0" }}
           >
             <div className="metric-card-header">
               <span className="metric-card-title">Active Dispatches</span>
               <div className="metric-icon-avatar indigo"><i className="fa-solid fa-truck-fast"></i></div>
             </div>
             <div className="metric-card-value">{activeDispatchesCount}</div>
-            <div className="metric-card-subtext">Currently in transit</div>
+            <div className="metric-card-subtext">Action required in warehouse</div>
           </div>
 
         </div>
@@ -2135,7 +2138,7 @@ export default function AdminPage() {
                       borderRadius: '12px' 
                     }}>
                       <span className="status-indicator online" style={{ width: '6px', height: '6px' }}></span>
-                      Live Auto-Sync: 2m
+                      Live Auto-Sync: 2m (Smart Pause)
                     </span>
                   </div>
                   <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: "4px 0 0 0" }}>Change statuses to trigger simulated BlueDart tracking logs</p>
@@ -2183,7 +2186,7 @@ export default function AdminPage() {
                       placeholder="Search ID, customer, phone..." 
                       style={{ width: "220px", height: "40px", paddingLeft: "34px", borderRadius: "8px", fontSize: "0.85rem" }}
                       value={orderSearch}
-                      onChange={(e) => setOrderSearch(e.target.value)}
+                      onChange={(e) => { setOrderSearch(e.target.value); setOrdersCurrentPage(1); }}
                     />
                   </div>
 
@@ -2194,20 +2197,20 @@ export default function AdminPage() {
                     <input 
                       type="date" 
                       value={startDateFilter} 
-                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      onChange={(e) => { setStartDateFilter(e.target.value); setOrdersCurrentPage(1); }}
                       style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 6px', fontSize: '0.78rem', color: '#1e293b', background: '#ffffff' }} 
                     />
                     <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>To:</span>
                     <input 
                       type="date" 
                       value={endDateFilter} 
-                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      onChange={(e) => { setEndDateFilter(e.target.value); setOrdersCurrentPage(1); }}
                       style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 6px', fontSize: '0.78rem', color: '#1e293b', background: '#ffffff' }} 
                     />
                     {(startDateFilter || endDateFilter) && (
                       <button 
                         type="button"
-                        onClick={() => { setStartDateFilter(""); setEndDateFilter(""); }}
+                        onClick={() => { setStartDateFilter(""); setEndDateFilter(""); setOrdersCurrentPage(1); }}
                         style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         title="Clear Date Range Filter"
                       >
@@ -2224,15 +2227,15 @@ export default function AdminPage() {
                 {[
                   { label: "Active Dispatches", value: "Active", icon: "fa-truck-fast", count: activeDispatchesCount },
                   { label: "Pending", value: "Pending", icon: "fa-clock-rotate-left", count: pendingOrdersCount },
-                  { label: "Packed", value: "Packed", icon: "fa-box", count: ordersList.filter(o => o.status === "Packed").length },
-                  { label: "Shipped", value: "Shipped", icon: "fa-paper-plane", count: ordersList.filter(o => o.status === "Shipped").length },
-                  { label: "Delivered", value: "Delivered", icon: "fa-circle-check", count: ordersList.filter(o => o.status === "Delivered").length },
+                  { label: "Packed", value: "Packed", icon: "fa-box", count: packedOrdersCount },
+                  { label: "Shipped", value: "Shipped", icon: "fa-paper-plane", count: shippedOrdersCount },
+                  { label: "Delivered", value: "Delivered", icon: "fa-circle-check", count: deliveredOrdersCount },
                   { label: "Today's Orders", value: "Today", icon: "fa-calendar-day", count: todayOrders.length },
                   { label: "All Transactions", value: "All", icon: "fa-list", count: totalOrdersCount }
                 ].map(filterBtn => (
                   <button
                     key={filterBtn.value}
-                    onClick={() => setOrderFilter(filterBtn.value)}
+                    onClick={() => { setOrderFilter(filterBtn.value); setOrdersCurrentPage(1); }}
                     style={{
                       padding: '6px 14px',
                       borderRadius: '20px',
@@ -2288,7 +2291,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredOrders.map(order => {
+                    paginatedOrders.map(order => {
                       const isExpanded = expandedAdminOrderId === order.id;
                       return (
                         <React.Fragment key={order.id}>
@@ -2349,7 +2352,7 @@ export default function AdminPage() {
                                     style={{ borderColor: "var(--primary)", color: "var(--primary)", padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}
                                     onClick={() => handleProcessOrder(order.id, "Shipped", order._docId)}
                                   >
-                                    <i className="fa-solid fa-truck-fast"></i> Ship
+                                    <i className="fa-solid fa-truck-fast"></i> Ship / Dispatch
                                   </button>
                                 )}
 
@@ -2439,6 +2442,122 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {filteredOrders.length > 0 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                padding: '16px 4px 4px 4px',
+                marginTop: '12px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                  Showing <b style={{ color: '#0f172a' }}>{Math.min((ordersCurrentPage - 1) * ordersPerPage + 1, filteredOrders.length)}</b> to <b style={{ color: '#0f172a' }}>{Math.min(ordersCurrentPage * ordersPerPage, filteredOrders.length)}</b> of <b style={{ color: '#0f172a' }}>{filteredOrders.length}</b> orders
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Per page:</span>
+                  <select
+                    value={ordersPerPage}
+                    onChange={(e) => {
+                      setOrdersPerPage(parseInt(e.target.value));
+                      setOrdersCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.8rem',
+                      background: '#ffffff',
+                      color: '#1e293b',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+
+                  <div style={{ display: 'flex', gap: '4px', marginLeft: '6px' }}>
+                    <button
+                      onClick={() => setOrdersCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={ordersCurrentPage === 1}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        background: ordersCurrentPage === 1 ? '#f1f5f9' : '#ffffff',
+                        color: ordersCurrentPage === 1 ? '#94a3b8' : '#334155',
+                        cursor: ordersCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-left" style={{ fontSize: '0.7rem' }}></i> Prev
+                    </button>
+
+                    {Array.from({ length: Math.ceil(filteredOrders.length / ordersPerPage) }, (_, idx) => idx + 1)
+                      .filter(page => {
+                        const totalP = Math.ceil(filteredOrders.length / ordersPerPage);
+                        return page === 1 || page === totalP || Math.abs(page - ordersCurrentPage) <= 1;
+                      })
+                      .map((page, idx, arr) => {
+                        const prevPage = arr[idx - 1];
+                        return (
+                          <React.Fragment key={page}>
+                            {prevPage && page - prevPage > 1 && (
+                              <span style={{ padding: '4px 6px', color: '#94a3b8', fontSize: '0.8rem' }}>...</span>
+                            )}
+                            <button
+                              onClick={() => setOrdersCurrentPage(page)}
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                border: ordersCurrentPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1',
+                                background: ordersCurrentPage === page ? 'var(--primary)' : '#ffffff',
+                                color: ordersCurrentPage === page ? '#ffffff' : '#334155',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                fontWeight: '700'
+                              }}
+                            >
+                              {page}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+
+                    <button
+                      onClick={() => setOrdersCurrentPage(prev => Math.min(Math.ceil(filteredOrders.length / ordersPerPage), prev + 1))}
+                      disabled={ordersCurrentPage >= Math.ceil(filteredOrders.length / ordersPerPage)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        background: ordersCurrentPage >= Math.ceil(filteredOrders.length / ordersPerPage) ? '#f1f5f9' : '#ffffff',
+                        color: ordersCurrentPage >= Math.ceil(filteredOrders.length / ordersPerPage) ? '#94a3b8' : '#334155',
+                        cursor: ordersCurrentPage >= Math.ceil(filteredOrders.length / ordersPerPage) ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      Next <i className="fa-solid fa-chevron-right" style={{ fontSize: '0.7rem' }}></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

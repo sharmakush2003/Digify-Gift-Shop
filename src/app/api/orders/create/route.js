@@ -83,7 +83,7 @@ export async function POST(request) {
       payment_reference_id: razorpayOrder.id,
       order_status: 'PAYMENT_PENDING',
       shipping_address: shippingAddressObj,
-      billing_address: customerDetails.billingAddress,
+      billing_address: customerDetails.billingAddress || shippingAddressObj || {},
       coupon_id: couponId
     };
 
