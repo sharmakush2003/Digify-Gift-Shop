@@ -739,8 +739,8 @@ export default function AdminPage() {
   }).length;
 
   const totalOrdersCount = ordersList.length;
-  // Active Dispatches are warehouse orders requiring action (Pending & Packed)
-  const activeDispatchesCount = ordersList.filter(o => o.status === "Pending" || o.status === "Packed").length;
+  // Active Dispatches are warehouse orders requiring action (Pending, Packed, & Shipped)
+  const activeDispatchesCount = ordersList.filter(o => o.status === "Pending" || o.status === "Packed" || o.status === "Shipped").length;
   const pendingOrdersCount = ordersList.filter(o => o.status === "Pending").length;
   const packedOrdersCount = ordersList.filter(o => o.status === "Packed").length;
   const pendingDispatchesCount = packedOrdersCount;
@@ -760,7 +760,7 @@ export default function AdminPage() {
                           (order.customerPhone && order.customerPhone.includes(orderSearch));
     
     const matchesStatus = orderFilter === "All" ||
-                          (orderFilter === "Active" && (order.status === "Pending" || order.status === "Packed")) ||
+                          (orderFilter === "Active" && (order.status === "Pending" || order.status === "Packed" || order.status === "Shipped")) ||
                           (orderFilter === "Pending" && order.status === "Pending") ||
                           (orderFilter === "Packed" && order.status === "Packed") ||
                           (orderFilter === "Shipped" && order.status === "Shipped") ||
@@ -2501,7 +2501,15 @@ export default function AdminPage() {
                                     <i className="fa-solid fa-truck-fast"></i> Ship / Dispatch
                                   </button>
                                 )}
-
+                                {order.status === "Shipped" && (
+                                  <button 
+                                    className="btn btn-outline btn-sm" 
+                                    style={{ borderColor: "#10b981", color: "#10b981", padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}
+                                    onClick={() => handleProcessOrder(order.id, "Delivered", order._docId)}
+                                  >
+                                    <i className="fa-solid fa-check-circle"></i> Mark as Delivered
+                                  </button>
+                                )}
                                 <button 
                                   className="btn btn-outline btn-sm"
                                   style={{ padding: "4px 8px", fontSize: "0.72rem", whiteSpace: "nowrap" }}

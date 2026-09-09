@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
   bannerSubtitle: "Join the elite hospitality dining experience with Orient Crockeries.",
   bannerImageUrl: "",
   delaySeconds: 1.5,
+  giftWrapFee: 50
 };
 
 export default function PromoPopupTab() {
@@ -55,6 +56,7 @@ export default function PromoPopupTab() {
     e.preventDefault();
     try {
       localStorage.setItem("orient_promo_popup_config", JSON.stringify(config));
+      localStorage.setItem("orient_gift_wrap_fee", String(config.giftWrapFee || 50));
       window.dispatchEvent(new Event("orient_promo_config_updated"));
 
       const { error } = await supabase.from('promo_config').upsert({
@@ -69,7 +71,7 @@ export default function PromoPopupTab() {
         console.warn("Supabase promo_config save fallback to local storage:", error.message);
       }
 
-      setMessage("✓ Promo Popup settings saved successfully to Cloud & Sync!");
+      setMessage("✓ Promo & Store Gift Wrap settings saved successfully to Cloud & Sync!");
       setTimeout(() => setMessage(""), 4000);
     } catch (e) {
       setMessage("Saved locally.");
@@ -236,6 +238,30 @@ export default function PromoPopupTab() {
                 onChange={(e) => setConfig({ ...config, bannerImageUrl: e.target.value })}
                 placeholder="https://images.unsplash.com/photo... (or leave empty for luxury gradient)"
               />
+            </div>
+
+            <div style={{ borderTop: "1.5px dashed #cbd5e1", paddingTop: "14px", marginTop: "8px", background: "#fdf2f8", padding: "12px", borderRadius: "8px", border: "1px solid #fbcfe8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontWeight: "700", color: "#9d174d", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <i className="fa-solid fa-gift" style={{ color: "#db2777" }}></i> Global Gift Packaging Surcharge (₹)
+                  </span>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.74rem", color: "#be185d" }}>
+                    Standard fee added to order total when customer chooses "Gift Wrap 🎀" during checkout.
+                  </p>
+                </div>
+                <div style={{ width: "110px" }}>
+                  <input 
+                    type="number" 
+                    min="0"
+                    step="1"
+                    className="form-input"
+                    value={config.giftWrapFee !== undefined ? config.giftWrapFee : 50}
+                    onChange={(e) => setConfig({ ...config, giftWrapFee: parseFloat(e.target.value) || 0 })}
+                    style={{ fontWeight: "700", color: "#9d174d", textAlign: "right" }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>

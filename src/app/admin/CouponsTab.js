@@ -32,16 +32,15 @@ export default function CouponsTab() {
     e.preventDefault();
     setMessage("Creating...");
     
-    // Check if user selected Additive
-    const isAdditive = formData.is_additive;
-    const finalType = isAdditive ? `${formData.discount_type}_ADDITIVE` : formData.discount_type;
+    const isAdditive = Boolean(formData.is_additive);
+    const cleanDiscountType = (formData.discount_type || "PERCENTAGE").replace('_ADDITIVE', '').toUpperCase().trim();
 
     let payload = {
       code: formData.code.toUpperCase().trim(),
-      discount_type: finalType,
-      discount_value: parseFloat(formData.discount_value),
-      min_cart_value: parseFloat(formData.min_cart_value),
-      is_active: formData.is_active,
+      discount_type: cleanDiscountType,
+      discount_value: parseFloat(formData.discount_value) || 0,
+      min_cart_value: parseFloat(formData.min_cart_value) || 0,
+      is_active: formData.is_active !== undefined ? formData.is_active : true,
       is_additive: isAdditive
     };
 

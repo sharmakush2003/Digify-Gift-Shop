@@ -8,6 +8,7 @@ import { saveOrder } from "../db";
 import { generateInvoicePDF } from "../utils/invoiceGenerator";
 import Link from "next/link";
 import Script from "next/script";
+import { supabase } from '../../supabase';
 
 export default function CheckoutPage() {
   const { cart, clearCart } = useApp();
@@ -30,6 +31,7 @@ export default function CheckoutPage() {
   const [area, setArea] = useState("Vaishali Nagar");
   const [shippingPincode, setShippingPincode] = useState("");
   const [giftPackaging, setGiftPackaging] = useState("standard"); // 'standard' | 'gift'
+  const [giftWrapFee, setGiftWrapFee] = useState(50);
   
   const [sameAsShipping, setSameAsShipping] = useState(true);
   const [billingStreet, setBillingStreet] = useState("");
@@ -51,26 +53,29 @@ export default function CheckoutPage() {
   }, [user, router]);
 
   useEffect(() => {
-    // Load values calculated on cart page
+    // Load values calculated on cart page & admin configs
     const savedShipping = parseFloat(localStorage.getItem("orient_checkout_shipping") || "0");
+    const configuredGiftWrap = parseFloat(localStorage.getItem("orient_gift_wrap_fee") || "50");
+    setGiftWrapFee(configuredGiftWrap > 0 ? configuredGiftWrap : 50);
     setBaseShippingFee(savedShipping);
     setShippingFee(deliveryMethod === "pickup" ? 0 : savedShipping);
     setPromoDiscount(parseFloat(localStorage.getItem("orient_checkout_promo_disc") || "0"));
     setPromoCode(localStorage.getItem("orient_checkout_promo_code") || "");
 
-    setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    setIsMobile(/Android|webOS|iPhone|iPad|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768);
   }, []);
 
-  // Update shipping fee & order total when deliveryMethod changes
+  // Update shipping fee, gift fee & order total when dependencies change
   useEffect(() => {
     const currentShipping = deliveryMethod === "pickup" ? 0 : baseShippingFee;
     setShippingFee(currentShipping);
     
-    // Recalculate grand total
+    // Recalculate grand total including gift wrapping if selected
+    const activeGiftCharge = giftPackaging === "gift" ? giftWrapFee : 0;
     const cartSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const calculatedTotal = cartSubtotal + currentShipping - promoDiscount;
+    const calculatedTotal = cartSubtotal + currentShipping + activeGiftCharge - promoDiscount;
     setOrderTotal(calculatedTotal > 0 ? calculatedTotal : 0);
-  }, [deliveryMethod, baseShippingFee, promoDiscount, cart]);
+  }, [deliveryMethod, baseShippingFee, promoDiscount, cart, giftPackaging, giftWrapFee]);
 
   // Prefill user details if logged in
   useEffect(() => {
@@ -181,18 +186,28 @@ export default function CheckoutPage() {
     
     // Call our secure backend to create order in DB
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
       const res = await fetch("/api/orders/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ 
           items: cart,
           couponCode: promoCode || null,
           shippingFee: shippingFee,
           deliveryMethod: deliveryMethod,
+          paymentMethod: 'COD',
+          giftWrapFee: giftPackaging === "gift" ? giftWrapFee : 0,
           customerDetails: {
             userId: user?.id,
             name, email, phone,
             deliveryMethod: deliveryMethod,
+            giftPackaging: giftPackaging,
+            giftWrapFee: giftPackaging === "gift" ? giftWrapFee : 0,
             shippingAddress: { 
               street: deliveryMethod === "pickup" ? (street || "Store Self Pickup") : street, 
               area: deliveryMethod === "pickup" ? "Vaishali Nagar" : area, 
@@ -200,7 +215,8 @@ export default function CheckoutPage() {
               state: 'Rajasthan', 
               pincode: deliveryMethod === "pickup" ? (shippingPincode || "302021") : shippingPincode, 
               raw_text: deliveryMethod === "pickup" ? "Self Pickup from Store - Orient Crockeries, Vaishali Nagar, Jaipur" : `${street}, ${area}, Jaipur, Rajasthan - ${shippingPincode}`,
-              delivery_method: deliveryMethod
+              delivery_method: deliveryMethod,
+              gift_packaging: giftPackaging
             },
             billingAddress: sameAsShipping ? 
               { street, area, city: 'Jaipur', state: 'Rajasthan', pincode: shippingPincode } : 
@@ -226,10 +242,16 @@ export default function CheckoutPage() {
     setPaymentStatus("Initializing Secure Payment Interface...");
     
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
       // Create order securely via backend
       const res = await fetch("/api/orders/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ 
           items: cart,
           couponCode: promoCode || null,
@@ -762,6 +784,13 @@ export default function CheckoutPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem", color: "var(--success)", fontWeight: "500" }}>
                   <span>Promo Discount ({promoCode})</span>
                   <span>-₹{promoDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              {giftPackaging === "gift" && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.8rem", fontSize: "0.9rem", color: "#db2777", fontWeight: "600" }}>
+                  <span><i className="fa-solid fa-ribbon" style={{ marginRight: "4px" }}></i> Luxury Gift Wrap</span>
+                  <span>+₹{giftWrapFee.toFixed(2)}</span>
                 </div>
               )}
 

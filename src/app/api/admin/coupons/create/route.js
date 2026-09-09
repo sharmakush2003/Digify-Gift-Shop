@@ -37,12 +37,27 @@ export async function POST(request) {
     const targetClient = adminSession.client;
     const payload = await request.json();
 
-    let { data, error } = await targetClient.from('coupons').insert([payload]).select();
+    // Sanitize discount_type to strictly match DB constraint (PERCENTAGE or FIXED)
+    const rawType = (payload.discount_type || 'PERCENTAGE').toString().toUpperCase().trim();
+    const cleanType = rawType.includes('FIXED') ? 'FIXED' : 'PERCENTAGE';
+    const isAdditive = Boolean(payload.is_additive || rawType.includes('ADDITIVE'));
+
+    const sanitizedPayload = {
+      ...payload,
+      code: (payload.code || '').toString().toUpperCase().trim(),
+      discount_type: cleanType,
+      discount_value: parseFloat(payload.discount_value) || 0,
+      min_cart_value: parseFloat(payload.min_cart_value) || 0,
+      is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
+      is_additive: isAdditive
+    };
+
+    let { data, error } = await targetClient.from('coupons').insert([sanitizedPayload]).select();
 
     // If is_additive column doesn't exist in Supabase DB schema, fallback without it
     if (error && error.message.includes('is_additive')) {
-      delete payload.is_additive;
-      const res = await targetClient.from('coupons').insert([payload]).select();
+      delete sanitizedPayload.is_additive;
+      const res = await targetClient.from('coupons').insert([sanitizedPayload]).select();
       error = res.error;
       data = res.data;
     }

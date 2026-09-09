@@ -673,9 +673,32 @@ function CatalogContent() {
       {selectedProduct && (
         <div className="modal-overlay active" onClick={() => setSelectedProduct(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setSelectedProduct(null)}>
-              <i className="fa-solid fa-xmark"></i>
-            </button>
+            {/* Top Navigation Bar with Back Button */}
+            <div className="modal-top-nav-bar">
+              <button 
+                type="button" 
+                className="modal-back-btn" 
+                onClick={() => setSelectedProduct(null)}
+                title="Return to Catalog"
+              >
+                <i className="fa-solid fa-arrow-left"></i>
+                <span>Back to Catalog</span>
+              </button>
+
+              <span className="modal-top-breadcrumb">
+                {selectedProduct.department} &rsaquo; {selectedProduct.category}
+              </span>
+
+              <button 
+                type="button" 
+                className="modal-close-btn-inline" 
+                onClick={() => setSelectedProduct(null)}
+                title="Close"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
             <div className="modal-img-side">
               <ProductImageZoomViewer 
                 product={selectedProduct} 

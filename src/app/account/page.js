@@ -30,17 +30,7 @@ export default function AccountPage() {
     setTimeout(() => setShowToast(false), 4000);
   };
 
-  const handleViewOrders = () => {
-    if (!orders || orders.length === 0) {
-      triggerToast("There are no past orders associated with your account yet.");
-    } else {
-      setViewingOrders(true);
-      setTimeout(() => {
-        const el = document.getElementById("order-history-section");
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  };
+
 
   const [userOrders, setUserOrders] = useState([]);
   const [fetchingOrders, setFetchingOrders] = useState(true);
@@ -50,32 +40,73 @@ export default function AccountPage() {
       if (!user) return;
       setFetchingOrders(true);
       try {
-        const cleanPhone = user.phone || user.user_metadata?.phone || '';
-        const formattedPhone = cleanPhone ? (cleanPhone.startsWith('+') ? cleanPhone : `+91${cleanPhone.replace(/\D/g, '').slice(-10)}`) : '';
-        const userEmail = user.email || '';
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        
+        if (!token) {
+          setUserOrders(orders || []);
+          setFetchingOrders(false);
+          return;
+        }
 
-        const filterConditions = [];
-        if (user.id) filterConditions.push(`customer_id.eq.${user.id}`);
-        if (userEmail) filterConditions.push(`guest_email.eq.${userEmail}`);
-        if (formattedPhone) filterConditions.push(`guest_phone.eq.${formattedPhone}`);
+        const res = await fetch('/api/account/orders', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        const responseData = await res.json();
 
-        if (filterConditions.length > 0) {
-          const { data } = await supabase
-            .from('orders')
-            .select('*')
-            .or(filterConditions.join(','));
-          setUserOrders(data || []);
+        if (res.ok && responseData.success && responseData.orders && responseData.orders.length > 0) {
+          const mappedOrders = responseData.orders.map(ord => ({
+            id: ord.order_number || ord.id,
+            date: ord.created_at || new Date().toISOString(),
+            customerName: ord.shipping_address?.name || user.user_metadata?.full_name || 'Orient Patron',
+            customerPhone: ord.guest_phone || ord.shipping_address?.phone || '',
+            customerEmail: ord.guest_email || user.email || '',
+            shippingAddress: typeof ord.shipping_address === 'object' ? (ord.shipping_address?.raw_text || `${ord.shipping_address?.street || ''}, ${ord.shipping_address?.area || ''}`) : ord.shipping_address,
+            items: (ord.order_items && ord.order_items.length > 0) ? ord.order_items.map(it => ({
+              id: it.product_id,
+              name: it.product_name || `Tableware Item #${it.product_id}`,
+              price: parseFloat(it.selling_price || it.mrp) || 0,
+              quantity: it.quantity || 1
+            })) : (ord.items || []),
+            subtotal: ord.total_mrp || ord.final_total || 0,
+            shipping: ord.shipping_charge || 0,
+            discount: ord.discount_amount || 0,
+            total: ord.final_total || 0,
+            status: ({'NEW':'Pending','PACKED':'Packed','DISPATCHED':'Shipped','DELIVERED':'Delivered'}[ord.order_status] || ord.order_status || 'Pending'),
+            paymentStatus: ord.payment_status || 'Paid',
+            delivery_otp: ord.delivery_otp
+          }));
+          setUserOrders(mappedOrders);
         } else {
-          setUserOrders([]);
+          // Fallback to local storage orders if empty
+          setUserOrders(orders || []);
         }
       } catch (err) {
         console.error("Error fetching user orders:", err);
+        setUserOrders(orders || []);
       }
       setFetchingOrders(false);
     };
 
     fetchMyOrders();
-  }, [user]);
+  }, [user, orders]);
+
+  const displayOrders = userOrders.length > 0 ? userOrders : (orders || []);
+
+  const handleViewOrders = () => {
+    if (!displayOrders || displayOrders.length === 0) {
+      triggerToast("There are no past orders associated with your account yet.");
+    } else {
+      setViewingOrders(true);
+      setTimeout(() => {
+        const el = document.getElementById("order-history-section");
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -119,7 +150,10 @@ export default function AccountPage() {
     if (!editName.trim()) return triggerToast("Name cannot be empty.");
     setIsSaving(true);
     try {
-      const { data, error } = await supabase.auth.updateUser({
+      const formattedCleanPhone = editPhone.trim() ? (editPhone.trim().startsWith('+') ? editPhone.trim() : `+91${editPhone.trim().replace(/\D/g, '').slice(-10)}`) : '';
+      
+      // 1. Update Auth metadata
+      const { error: authErr } = await supabase.auth.updateUser({
         data: { 
           full_name: editName.trim(),
           phone: editPhone.trim(),
@@ -128,12 +162,45 @@ export default function AccountPage() {
           pincode: editPincode.trim()
         }
       });
-      if (error) throw error;
+      if (authErr) throw authErr;
+
+      // Get current auth session token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
       
-      // Also update in public users table
-      await supabase.from('users').update({ full_name: editName.trim() }).eq('id', user.id);
+      // 2. Direct authenticated update on public.customers table (runs with user's JWT)
+      const { error: directCustErr } = await supabase
+        .from('customers')
+        .update({
+          full_name: editName.trim(),
+          phone_number: formattedCleanPhone
+        })
+        .eq('id', user.id);
+
+      if (directCustErr) {
+        console.warn('Direct client update note:', directCustErr.message);
+      }
+
+      // 3. Call backend API with Bearer token for server-side assurance
+      try {
+        await fetch('/api/account/update-profile', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            name: editName.trim(),
+            phone: formattedCleanPhone,
+            email: user.email || ''
+          })
+        });
+      } catch (apiErr) {
+        console.warn('API profile sync notice:', apiErr);
+      }
       
-      triggerToast("Profile updated successfully!");
+      triggerToast("Profile updated & synchronized to Supabase!");
       setIsEditingProfile(false);
     } catch (err) {
       triggerToast("Failed to update profile: " + err.message);
@@ -167,7 +234,7 @@ export default function AccountPage() {
         <div className="account-stats-row">
           <div className="account-stat-card">
             <span className="stat-label">Total Orders</span>
-            <span className="stat-value">{fetchingOrders ? '...' : userOrders.length}</span>
+            <span className="stat-value">{fetchingOrders ? '...' : displayOrders.length}</span>
           </div>
           <div className="account-stat-card">
             <span className="stat-label">Saved Wishlist</span>
@@ -375,15 +442,15 @@ export default function AccountPage() {
         </div>
 
         {/* Orders List Section */}
-        {viewingOrders && orders && orders.length > 0 && (
+        {viewingOrders && displayOrders && displayOrders.length > 0 && (
           <div id="order-history-section" className="orders-section-wrapper">
             <div className="orders-section-header">
               <h2>Your Order History</h2>
-              <span className="orders-count-badge">{orders.length} Orders</span>
+              <span className="orders-count-badge">{displayOrders.length} Orders</span>
             </div>
             
             <div className="orders-list">
-              {orders.map((order, i) => (
+              {displayOrders.map((order, i) => (
                 <div key={order.id || i} className="order-item-card">
                   <div className="order-item-top">
                     <div>

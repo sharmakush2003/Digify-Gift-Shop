@@ -903,6 +903,74 @@ nav {
   opacity: 1;
 }
 
+/* Modal Top Navigation Bar & Back Button */
+.modal-top-nav-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-bottom: 1.5px solid #f1f5f9;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.modal-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  color: #1e293b;
+  border: 1.5px solid #cbd5e1;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+}
+
+.modal-back-btn:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  transform: translateX(-3px);
+  box-shadow: 0 4px 12px rgba(157, 127, 84, 0.25);
+}
+
+.modal-top-breadcrumb {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.modal-close-btn-inline {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #475569;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn-inline:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  transform: rotate(90deg);
+}
+
 .modal-close-btn {
   position: absolute;
   top: 20px;
@@ -3347,32 +3415,47 @@ footer {
 .profile-details-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 2rem;
-  background: var(--bg-main);
-  padding: 1.2rem;
+  background: #f8fafc;
+  padding: 1.25rem;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1.5px solid #e2e8f0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .detail-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.88rem;
+  gap: 12px;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .detail-label {
-  color: var(--text-muted);
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .detail-val {
-  font-weight: 600;
-  color: var(--dark);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 180px;
+  font-weight: 700;
+  color: #0f172a !important;
+  word-break: break-word;
+  white-space: normal;
+  text-align: right;
+  line-height: 1.4;
+  font-size: 0.9rem;
 }
 
 .status-pill-verified {
